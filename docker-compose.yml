@@ -1,0 +1,43 @@
+version: "3.9"
+services:
+  db:
+    image: mysql:8.0
+    container_name: used2book_backend_db
+    restart: always
+    ports:
+      - "6950:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: used2book_db
+      MYSQL_USER: used2book
+      MYSQL_PASSWORD: used2book_password
+    volumes:
+      - db_data:/var/lib/mysql
+
+volumes:
+  db_data:
+
+  # backend:
+  #   build: ./backend           # Assume you have a Dockerfile in a backend directory
+  #   container_name: bookapp_backend
+  #   restart: always
+  #   ports:
+  #     - "8080:8080"            # Mapping port 8080 for your Go app
+  #   environment:
+  #     DB_HOST: db
+  #     DB_USER: pae
+  #     DB_PASSWORD: todopassword
+  #     DB_NAME: todo_app
+  #   depends_on:
+  #     - db                     # Ensures database starts before backend
+
+  # Optionally add a frontend service if needed
+  # frontend:
+  #   build: ./frontend
+  #   container_name: bookapp_frontend
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
+
+
