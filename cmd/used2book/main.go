@@ -34,20 +34,22 @@ import (
 	"github.com/joho/godotenv"
 )
 
+
+
 func main() {
 
 	if err := godotenv.Load(); err != nil {
         log.Println("No .env file found")
     }
-	
+
     db := utils.GetDB()
 
     router := api.SetupRouter(db)
 
 	utils.RunMigrations()
 
-    log.Println("Server is listening on port 3000")
-    if err := http.ListenAndServe(":3000", router); err != nil {
+    log.Println("Server is listening on port 6951")
+    if err := http.ListenAndServe(":6951", router); err != nil {
         log.Fatalf("Server failed: %v", err)
     }
 }

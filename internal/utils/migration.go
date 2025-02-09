@@ -16,13 +16,20 @@ func RunMigrations() {
 		`CREATE TABLE IF NOT EXISTS users (
 			id INT AUTO_INCREMENT PRIMARY KEY,
 			email VARCHAR(255) NOT NULL UNIQUE,
-			verified_email BOOLEAN NOT NULL,
-			name VARCHAR(255),
-			picture VARCHAR(255),
+
+			username VARCHAR(255) DEFAULT NULL,
+			provider ENUM('google','local') NOT NULL,
+            
+            hashed_password VARCHAR(255),
+            phone_number VARCHAR(20) DEFAULT NULL,
+			picture VARCHAR(255) DEFAULT NULL,
 			role ENUM('user','admin') DEFAULT 'user',
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-		);`,
+            );`,
+            
+        // provider_id VARCHAR(255),
+        
 
         // Books table
         `CREATE TABLE IF NOT EXISTS books (
@@ -186,6 +193,15 @@ func RunMigrations() {
             FOREIGN KEY (post_id) REFERENCES posts(id),
             FOREIGN KEY (tag_id) REFERENCES tags(id)
         );`,
+        `CREATE TABLE IF NOT EXISTS refresh_tokens (
+			id INT AUTO_INCREMENT PRIMARY KEY,
+			user_id INT NOT NULL,
+			token VARCHAR(512) NOT NULL UNIQUE,
+			device_info VARCHAR(255),  -- Optional: Device/browser details
+			expires_at DATETIME NOT NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id)
+		);`,
     }
 
     for _, query := range queries {

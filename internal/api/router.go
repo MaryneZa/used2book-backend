@@ -1,36 +1,47 @@
 package api
 
 import (
-    "net/http"
-
-    "github.com/go-chi/chi"
-	"used2book-backend/internal/api/handlers"
-    "used2book-backend/internal/config"
-    "used2book-backend/internal/repository/mysql"
-    "used2book-backend/internal/services"
 	"database/sql"
-    _ "github.com/go-sql-driver/mysql" // Import the MySQL driver
+	"fmt"
+	"net/http"
+	"used2book-backend/internal/api/routes"
+	"used2book-backend/internal/config"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 )
 
 func SetupRouter(db *sql.DB) http.Handler {
-	
-	// Initialize OAuth configuration
-    config.InitOAuth()
-	
-    // Initialize repository, service, and handler for user-related actions
-    userRepo := mysql.NewUserRepository(db)
-    userService := services.NewUserService(userRepo)
-    authHandler := &handlers.AuthHandler{
-		UserService: userService,
-    }
-	
+	config.InitOAuth()
 	r := chi.NewRouter()
-    r.Get("/", authHandler.IndexHandler)
-    r.Get("/login", authHandler.LoginHandler)
-    r.Get("/signup", authHandler.SignupHandler)
 
-    r.Get("/login/callback", authHandler.LoginCallbackHandler)
-    r.Get("/signup/callback", authHandler.SignupCallbackHandler)
+	// Basic CORS
+  	// for more ideas, see: https://developer.github.com/v3/#cross-origin-resource-sharing
+  	r.Use(cors.Handler(cors.Options{
+    // AllowedOrigins:   []string{"https://foo.com"}, // Use this to allow specific origin hosts
+    AllowedOrigins:   []string{"https://*", "http://*"},
+    // AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
+    AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+    AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+    ExposedHeaders:   []string{"Link"},
+    AllowCredentials: true,
+    MaxAge:           300, // Maximum value not ignored by any of major browsers
+  	}))
 
-    return r
+	// ✅ Add logging middleware for debugging
+	r.Use(middleware.Logger)
+
+	// ✅ Register API routes correctly
+	r.Mount("/user", routes.UserRoutes(db))
+	r.Mount("/auth", routes.TokenRoutes(db))
+
+	// ✅ Debugging: Print all registered routes
+	fmt.Println("🔍 Registered Routes:")
+	_ = chi.Walk(r, func(method string, route string, handler http.Handler, middlewares ...func(http.Handler) http.Handler) error {
+		fmt.Printf("%s %s\n", method, route)
+		return nil
+	})
+
+	return r
 }

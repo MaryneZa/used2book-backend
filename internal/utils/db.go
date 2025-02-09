@@ -24,7 +24,7 @@ func GetDB() *sql.DB {
             os.Getenv("DB_PORT"),
             os.Getenv("DB_NAME"),
         )
-		log.Println("Connecting to DB with DSN:", dsn)
+		// log.Println("Connecting to DB with DSN:", dsn)
 
 
         var err error
