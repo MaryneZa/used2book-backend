@@ -7,43 +7,51 @@ import (
 	"used2book-backend/internal/repository/mysql"
 	"used2book-backend/internal/services"
 	"used2book-backend/internal/middleware"
+
 	"github.com/go-chi/chi/v5"
 	_ "github.com/go-sql-driver/mysql" // Import the MySQL driver
 )
 
 func UserRoutes(db *sql.DB) http.Handler {
 
-	// Initialize repository, service, and handler for user-related actions
+
 	userRepo := mysql.NewUserRepository(db)
 	userService := services.NewUserService(userRepo)
-	tokenRepo := mysql.NewTokenRepository(db)
-	tokenService := services.NewTokenService(tokenRepo, userRepo)
-	authHandler := &handlers.AuthHandler{
+	uploadService := services.NewUploadService(userRepo)
+
+	
+	userHandler := &handlers.UserHandler{
 		UserService:  userService,
-		TokenService: tokenService,
+		UploadService:  uploadService,
 	}
 
 	r := chi.NewRouter()
 
-	r.Get("/", authHandler.IndexHandler)
-	r.Get("/google-provider", authHandler.GoogleHandler)
-	r.Get("/callback", authHandler.GoogleCallbackHandler)
+	r.With(middleware.AuthMiddleware).Get("/me", userHandler.GetMeHandler)
 	
-	r.Post("/login/email", authHandler.LoginEmailHandler)
-	r.Post("/signup/email", authHandler.SignupEmailHandler)
-	
-	// r.Get("/login/callback", authHandler.LoginGoogleCallbackHandler)
-	// r.Get("/signup/callback", authHandler.SignupGoogleCallbackHandler)
-	// r.Get("/login-google", authHandler.LoginGoogleHandler)
-	// r.Get("/signup-google", authHandler.SignupGoogleHandler)
+	r.With(middleware.AuthMiddleware).Post("/upload-profile-image", userHandler.UploadProfileImageHandler)
+	r.With(middleware.AuthMiddleware).Post("/upload-background-image", userHandler.UploadBackgroundImageHandler)
+	r.With(middleware.AuthMiddleware).Post("/edit-account-info", userHandler.EditAccountInfoHandler)
+	r.With(middleware.AuthMiddleware).Post("/edit-username", userHandler.EditUserNameHandler)
+	r.With(middleware.AuthMiddleware).Post("/edit-preferrence", userHandler.EditPreferrenceHandler)
 
-	// ✅ Add protected route for `getMe`
-	r.With(middleware.AuthMiddleware).Get("/me", authHandler.GetMeHandler)
+	r.With(middleware.AuthMiddleware).Post("/add-library", userHandler.AddBookToLibraryHandler)
+
+	r.With(middleware.AuthMiddleware).Get("/get-listing", userHandler.GetAllListingsHandler)
+	r.With(middleware.AuthMiddleware).Get("/get-library", userHandler.GetUserLibraryHandler)
+
+
+
+
+	r.Get("/all-users", userHandler.GetAllUsersHandler)
+
+
+	r.With(middleware.AuthMiddleware).With(middleware.AdminMiddleware(db)).Get("/user-count", userHandler.GetUserCount) // Sync books from Google Sheets
+
+	// r.With(middleware.AuthMiddleware).Post("/edit-phone-number", userHandler.EditPhoneNumberHandler)
+
+
+
 	return r
 
-	// r.Post("/sign-up", user.SignupGoogleHandler)
-	// r.Post("/login", user.LoginGoogleHandler)
-	// r.Post("/get-access", user.RefreshTokenHandler)
-	// r.With(middleware.AdminMiddleware).Post("/get-blacklist", user.AdminMiddleware)
-	// r.With(middleware.AuthMiddleware).Get("/users", user.GetUsersHandler)
 }

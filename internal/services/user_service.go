@@ -2,12 +2,9 @@ package services
 
 import (
 	"context"
-	"fmt"
-	"log"
-	"time"
 	"used2book-backend/internal/models"
 	"used2book-backend/internal/repository/mysql"
-	"used2book-backend/internal/utils"
+	"database/sql"
 )
 
 type UserService struct {
@@ -17,68 +14,13 @@ type UserService struct {
 func NewUserService(repo *mysql.UserRepository) *UserService {
 	return &UserService{userRepo: repo}
 }
-func (us *UserService) Signup(ctx context.Context, reqUser models.AuthUser) (*models.User, error) {
-	existing, err := us.userRepo.FindByEmail(ctx, reqUser.Email)
-	if err != nil {
-		return nil, err
-	}
-	log.Println("user provider %s", reqUser.Provider)
-	if existing != nil {
-		return nil, fmt.Errorf("user already exists")
-	}
 
-	// 3. Hash password (bcrypt, argon2, etc.)
-
-	// Before hashing, just declare hashedPassword as an empty string:
-	var hashedPassword string
-
-	if reqUser.Provider == "local" {
-		hashed, err := utils.HashedPassword(reqUser.Password)
-		if err != nil {
-			return nil, fmt.Errorf("failed to hash password: %w", err)
-		}
-		hashedPassword = hashed
-	}
-
-	newUser := &models.User{
-		Email:          reqUser.Email,
-		HashedPassword: hashedPassword,
-		Provider:       reqUser.Provider,
-		Role:           "user",
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
-	}
-
-	if err := us.userRepo.Create(ctx, newUser); err != nil {
-		return nil, err
-	}
-
-	return newUser, nil
-}
-
-func (us *UserService) Login(ctx context.Context, reqUser models.AuthUser) (*models.User, error) {
-	user, err := us.userRepo.FindByEmail(ctx, reqUser.Email)
-	if err != nil {
-		return nil, err
-	}
-
-	if user == nil {
-		return nil, fmt.Errorf("there is no this account: ", reqUser.Email)
-	}
-
-	// Verify the password
-	if reqUser.Provider == "local" {
-		if !utils.CheckPasswordHash(user.HashedPassword, reqUser.Password) {
-			return nil, fmt.Errorf("invalid email or password")
-		}
-	}
-
-	return user, nil
-
+func (us *UserService) GetAllUsers(ctx context.Context) ([]models.GetAllUsers, error) {
+	return us.userRepo.GetAllUsers(ctx)
 }
 
 // ✅ Fetch user by ID
-func (us *UserService) GetUserByID(ctx context.Context, userID int) (*models.User, error) {
+func (us *UserService) GetUserByID(ctx context.Context, userID int) (*models.GetMe, error) {
 	return us.userRepo.FindByID(ctx, userID)
 }
 
@@ -89,13 +31,44 @@ func (us *UserService) GetMe(ctx context.Context, userID int) (*models.GetMe, er
 		return nil, err
 	}
 
-	me := &models.GetMe{
-		ID: 			user.ID,
-		Email:          user.Email,
-		Name:			user.Name,
-		Role:           "user",
-	}
 	
-	return me, err
+	return user, err
 
+}
+
+func (us *UserService) EditAccountInfo(ctx context.Context, userID int, firstName string, lastName string, phoneNumber sql.NullString)  error {
+	return us.userRepo.EditAccountInfo(ctx, userID, firstName, lastName, phoneNumber)
+}
+
+func (us *UserService) EditPhoneNumber(ctx context.Context, userID int, phoneNumber string)  error {
+	return us.userRepo.EditPhoneNumber(ctx, userID, phoneNumber)
+}
+
+func (us *UserService) IsPhoneNumberTaken(ctx context.Context, phoneNumber string) (bool, error) {
+	return us.userRepo.IsPhoneNumberTaken(ctx, phoneNumber)
+}
+
+func (us *UserService) EditName(ctx context.Context, userID int, firstName string, lastName string)  error {
+	return us.userRepo.EditName(ctx, userID, firstName, lastName)
+}
+
+func (us *UserService) EditPreferrence(ctx context.Context, userID int, quote string, bio string)  error {
+	return us.userRepo.EditPreferrence(ctx, userID, quote, bio)
+}
+
+
+func (us *UserService) AddBookToLibrary(ctx context.Context, userID int, bookID int, own_status string, price float32, allow_offer bool)  error {
+	return us.userRepo.AddBookToLibrary(ctx , userID, bookID, own_status, price, allow_offer)
+}
+
+func (us *UserService) CountUsers() (int, error) {
+	return us.userRepo.CountUsers()
+}
+
+func (us *UserService) GetUserLibrary(ctx context.Context, userID int) ([]models.UserLibrary, error){
+	return us.userRepo.GetUserLibrary(ctx, userID)
+}
+
+func (us *UserService) GetAllListings(ctx context.Context, userID int) ([]models.UserListing, error){
+	return us.userRepo.GetAllListings(ctx, userID)
 }

@@ -22,10 +22,10 @@ func NewTokenRepository(db *sql.DB) *TokenRepository {
 
 func (tr *TokenRepository) FindByEmail(ctx context.Context, email string) (*models.User, error) {
 	var user models.User
-	query := "SELECT id, email, username, picture FROM users WHERE email = ?"
+	query := "SELECT id, email, first_name, last_name, picture_profile FROM users WHERE email = ?"
 
 	err := tr.db.QueryRowContext(ctx, query, email).Scan(
-		&user.ID, &user.Email, &user.Name, &user.ProfilePicture,
+		&user.ID, &user.Email, &user.FirstName, &user.LastName, &user.ProfilePicture,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

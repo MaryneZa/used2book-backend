@@ -14,6 +14,7 @@ import (
 
 func SetupRouter(db *sql.DB) http.Handler {
 	config.InitOAuth()
+
 	r := chi.NewRouter()
 
 	// Basic CORS
@@ -33,8 +34,10 @@ func SetupRouter(db *sql.DB) http.Handler {
 	r.Use(middleware.Logger)
 
 	// ✅ Register API routes correctly
+	r.Mount("/auth", routes.AuthRoutes(db))
 	r.Mount("/user", routes.UserRoutes(db))
-	r.Mount("/auth", routes.TokenRoutes(db))
+	r.Mount("/book", routes.BookRoutes(db))
+	r.Mount("/auth-token", routes.TokenRoutes(db))
 
 	// ✅ Debugging: Print all registered routes
 	fmt.Println("🔍 Registered Routes:")

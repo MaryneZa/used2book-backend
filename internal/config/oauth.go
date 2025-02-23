@@ -23,7 +23,7 @@ func InitOAuth() {
 	}
 
 	GoogleConfig = &oauth2.Config{
-		RedirectURL:  "http://localhost:6951/user/callback", // adjust as necessary
+		RedirectURL:  "http://localhost:6951/auth/callback", // adjust as necessary
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
 		Scopes: []string{
