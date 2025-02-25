@@ -16,8 +16,6 @@ import (
 
 	"github.com/dchest/uniuri"
 	"golang.org/x/oauth2"
-
-
 )
 
 type AuthHandler struct {
@@ -245,6 +243,8 @@ func sendSuccessResponse(w http.ResponseWriter, data map[string]interface{}) {
 }
 
 func sendErrorResponse(w http.ResponseWriter, statusCode int, message string) {
+
+	log.Println("error:",message)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	response := map[string]interface{}{

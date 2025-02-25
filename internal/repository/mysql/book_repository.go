@@ -230,6 +230,37 @@ func (br *BookRepository) NumberOfBooks(ctx context.Context) (int, error) {
 	return count, nil // Return the count and no error
 }
 
+func (br *BookRepository) GetReviewsByBookID(ctx context.Context, bookID int) ([]models.BookReview, error) {
+	query := `SELECT br.id, br.user_id, u.first_name, u.last_name, u.picture_profile, br.rating, br.comment, br.created_at, br.updated_at
+			  FROM book_reviews br
+			  JOIN users u ON br.user_id = u.id
+			  WHERE br.book_id = ? 
+			  ORDER BY br.created_at DESC`
+
+	rows, err := br.db.QueryContext(ctx, query, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var reviews []models.BookReview
+	for rows.Next() {
+		var review models.BookReview
+		err := rows.Scan(&review.ID, &review.UserID, &review.FirstName, &review.LastName, &review.UserProfile,&review.Rating, &review.Comment, &review.CreatedAt, &review.UpdatedAt)
+		if err != nil {
+			return nil, err
+		}
+		reviews = append(reviews, review)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return reviews, nil
+}
+
+
 // Helper functions for parsing values
 func parseInt(value string) int {
 	var i int
@@ -288,7 +319,7 @@ func (br *BookRepository) SyncBooksFromGoogleSheets(sheetID, apiKey string) erro
 	}
 
 	ctx := context.Background()
-	for i, row := range records[1:15] { // Skip header row
+	for i, row := range records[1:30] { // Skip header row
 		if len(row) < 18 {
 			log.Printf("⚠️ Skipping row %d: insufficient data\n", i+1)
 			continue
@@ -403,3 +434,14 @@ func (br *BookRepository) GetGenresByBookID(ctx context.Context, bookID int) ([]
 
 	return genres, nil
 }
+
+
+func (br *BookRepository) AddBookReview(ctx context.Context, userID int, bookID int, rating float32, comment string) error {
+	query := `INSERT INTO book_reviews (user_id, book_id, rating, comment, created_at, updated_at) 
+	          VALUES (?, ?, ?, ?, NOW(), NOW()) 
+	          ON DUPLICATE KEY UPDATE rating = VALUES(rating), comment = VALUES(comment), updated_at = NOW()`
+
+	_, err := br.db.ExecContext(ctx, query, userID, bookID, rating, comment)
+	return err
+}
+

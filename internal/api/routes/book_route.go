@@ -20,9 +20,13 @@ func BookRoutes(db *sql.DB) http.Handler {
 	// Initialize Services
 	bookService := services.NewBookService(bookRepo)
 
+	userRepo := mysql.NewUserRepository(db)
+	userService := services.NewUserService(userRepo)
+
 	// Initialize Handlers
 	bookHandler := &handlers.BookHandler{
 		BookService: bookService,
+		UserService: userService,
 	}
 
 	r := chi.NewRouter()
@@ -42,6 +46,12 @@ func BookRoutes(db *sql.DB) http.Handler {
 	// Protected Routes (Require Authentication)
 	r.With(middleware.AuthMiddleware).Post("/{id:[0-9]+}/rate", bookHandler.AddOrUpdateUserRating)
 	r.With(middleware.AuthMiddleware).Delete("/{id:[0-9]+}/rate", bookHandler.DeleteUserRating)
+
+	r.With(middleware.AuthMiddleware).Get("/{id:[0-9]+}/listings", bookHandler.GetAllListingsByBookID)
+	r.With(middleware.AuthMiddleware).Get("/{id:[0-9]+}/get-reviews", bookHandler.GetReviewsByBookIDHandler)
+
+
+	r.With(middleware.AuthMiddleware).Post("/add-review", bookHandler.AddBookReviewHandler)
 
 	return r
 }

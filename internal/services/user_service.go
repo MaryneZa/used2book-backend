@@ -30,8 +30,6 @@ func (us *UserService) GetMe(ctx context.Context, userID int) (*models.GetMe, er
 	if err != nil {
 		return nil, err
 	}
-
-	
 	return user, err
 
 }
@@ -57,7 +55,7 @@ func (us *UserService) EditPreferrence(ctx context.Context, userID int, quote st
 }
 
 
-func (us *UserService) AddBookToLibrary(ctx context.Context, userID int, bookID int, own_status string, price float32, allow_offer bool)  error {
+func (us *UserService) AddBookToLibrary(ctx context.Context, userID int, bookID int, own_status string, price float32, allow_offer bool)  (bool, error) {
 	return us.userRepo.AddBookToLibrary(ctx , userID, bookID, own_status, price, allow_offer)
 }
 
@@ -71,4 +69,20 @@ func (us *UserService) GetUserLibrary(ctx context.Context, userID int) ([]models
 
 func (us *UserService) GetAllListings(ctx context.Context, userID int) ([]models.UserListing, error){
 	return us.userRepo.GetAllListings(ctx, userID)
+}
+
+func (us *UserService) GetAllListingsByBookID(ctx context.Context, userID int, bookID int) ([]models.UserListing, error){
+	return us.userRepo.GetAllListingsByBookID(ctx, userID, bookID)
+}
+
+func (us *UserService) GetMyListings(ctx context.Context, userID int) ([]models.UserListing, error){
+	return us.userRepo.GetMyListings(ctx, userID)
+}
+
+func (us *UserService) GetWishlistByUserID(ctx context.Context, userID int) ([]models.Book, error) {
+	return us.userRepo.GetWishlistByUserID(ctx, userID)
+}
+
+func (us *UserService) IsBookInWishlist(ctx context.Context, userID int, bookID int) (bool, error) {
+	return us.userRepo.IsBookInWishlist(ctx, userID, bookID)
 }

@@ -96,31 +96,54 @@ func (ur *UserRepository) Create(ctx context.Context, user *models.User) (int, e
 	return int(id), nil
 }
 
-func (ur *UserRepository) AddBookToLibrary(ctx context.Context, userID int, bookID int, ownStatus string, price float32, allowOffer bool) error {
-	query := `INSERT INTO user_libraries (user_id, book_id, status, created_at, updated_at) 
-	          VALUES (?, ?, ?, NOW(), NOW()) 
-	          ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = NOW()`
 
-	_, err := ur.db.ExecContext(ctx, query, userID, bookID, ownStatus)
-	if err != nil {
-		return err
-	}
-
-	// If the book is "owned", add/update the listing
-	if ownStatus == "owned" {
-		query = `INSERT INTO listings (seller_id, book_id, price, allow_offers, created_at, updated_at) 
-		         VALUES (?, ?, ?, ?, NOW(), NOW()) 
-		         ON DUPLICATE KEY UPDATE price = VALUES(price), allow_offers = VALUES(allow_offers), status = 'for_sale', updated_at = NOW()`
-
-		_, err = ur.db.ExecContext(ctx, query, userID, bookID, price, allowOffer)
+func (ur *UserRepository) AddBookToLibrary(ctx context.Context, userID int, bookID int, ownStatus string, price float32, allowOffer bool) (bool, error) {
+	// ✅ If the request is to add to wishlist, check if it already exists
+	if ownStatus == "wishlist" {
+		var count int
+		checkQuery := `SELECT COUNT(*) FROM user_libraries WHERE user_id = ? AND book_id = ? AND status = 'wishlist'`
+		err := ur.db.QueryRowContext(ctx, checkQuery, userID, bookID).Scan(&count)
 		if err != nil {
-			return err
+			return false, err
+		}
+
+		// ✅ If the book is already in wishlist, remove it
+		if count > 0 {
+			deleteQuery := `DELETE FROM user_libraries WHERE user_id = ? AND book_id = ? AND status = 'wishlist'`
+			_, err = ur.db.ExecContext(ctx, deleteQuery, userID, bookID)
+			if err != nil {
+				return false, err
+			}
+			log.Println("✅ Book removed from wishlist for user:", userID, "BookID:", bookID)
+			return false, nil // ✅ Book was removed from wishlist
 		}
 	}
 
-	log.Println("Book added to library for user:", userID, "BookID:", bookID, "Status:", ownStatus)
-	return nil
+	// ✅ Add/update book in the library
+	insertQuery := `INSERT INTO user_libraries (user_id, book_id, status, created_at, updated_at) 
+	                VALUES (?, ?, ?, NOW(), NOW()) 
+	                ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = NOW()`
+	_, err := ur.db.ExecContext(ctx, insertQuery, userID, bookID, ownStatus)
+	if err != nil {
+		return false, err
+	}
+
+	// ✅ If the book is marked as "owned", add it to listings
+	if ownStatus == "owned" {
+		query := `INSERT INTO listings (seller_id, book_id, price, allow_offers, created_at, updated_at) 
+		         VALUES (?, ?, ?, ?, NOW(), NOW()) 
+		         ON DUPLICATE KEY UPDATE price = VALUES(price), allow_offers = VALUES(allow_offers), status = 'for_sale', updated_at = NOW()`
+
+		_, err := ur.db.ExecContext(ctx, query, userID, bookID, price, allowOffer)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	log.Println("✅ Book added to library for user:", userID, "BookID:", bookID, "Status:", ownStatus)
+	return true, nil // ✅ Book is now in wishlist or owned
 }
+
 
 
 func (ur *UserRepository) FindByID(ctx context.Context, userID int) (*models.GetMe, error) {
@@ -292,7 +315,7 @@ func (ur *UserRepository) CountUsers() (int, error) {
 func (ur *UserRepository) GetUserLibrary(ctx context.Context, userID int) ([]models.UserLibrary, error) {
 	query := `SELECT id, user_id, book_id, status
 	          FROM user_libraries 
-	          WHERE user_id = ?`
+	          WHERE user_id = ? AND status != "wishlist"`
 
 	rows, err := ur.db.QueryContext(ctx, query, userID)
 	if err != nil {
@@ -342,6 +365,104 @@ func (ur *UserRepository) GetAllListings(ctx context.Context, userID int) ([]mod
 	log.Println("Fetched listings for marketplace (excluding user:", userID, ")")
 	return listings, nil
 }
+
+func (ur *UserRepository) GetAllListingsByBookID(ctx context.Context, userID int, bookID int) ([]models.UserListing, error) {
+	query := `SELECT id, seller_id, book_id, price, status, allow_offers
+	          FROM listings 
+	          WHERE seller_id != ? AND book_id = ? AND status = 'for_sale'`
+	
+
+	rows, err := ur.db.QueryContext(ctx, query, userID, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var listings []models.UserListing
+	for rows.Next() {
+		var listing models.UserListing
+		if err := rows.Scan(&listing.ID, &listing.SellerID, &listing.BookID, &listing.Price, &listing.Status, &listing.AllowOffer); err != nil {
+			return nil, err
+		}
+		listings = append(listings, listing)
+	}
+
+	log.Println("Fetched listings for marketplace (excluding user:", userID, ")")
+	return listings, nil
+}
+
+
+func (ur *UserRepository) GetMyListings(ctx context.Context, userID int) ([]models.UserListing, error) {
+	query := `SELECT id, seller_id, book_id, price, status, allow_offers
+	          FROM listings 
+	          WHERE seller_id = ? AND status = 'for_sale'`
+
+	rows, err := ur.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var listings []models.UserListing
+	for rows.Next() {
+		var listing models.UserListing
+		if err := rows.Scan(&listing.ID, &listing.SellerID, &listing.BookID, &listing.Price, &listing.Status, &listing.AllowOffer); err != nil {
+			return nil, err
+		}
+		listings = append(listings, listing)
+	}
+
+	log.Println("Fetched listings for marketplace (excluding user:", userID, ")")
+	return listings, nil
+}
+
+func (ur *UserRepository) IsBookInWishlist(ctx context.Context, userID int, bookID int) (bool, error) {
+	// Query to check if the book exists in the wishlist
+	query := `SELECT COUNT(*) 
+	          FROM user_libraries 
+	          WHERE user_id = ? AND book_id = ? AND status = 'wishlist'`
+
+	var count int
+	// Execute the query and scan the result
+	err := ur.db.QueryRowContext(ctx, query, userID, bookID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+
+	// Return true if the book is in the wishlist, false otherwise
+	return count > 0, nil
+}
+
+
+func (ur *UserRepository) GetWishlistByUserID(ctx context.Context, userID int) ([]models.Book, error) {
+	query := `SELECT b.id, b.title, b.author, b.cover_image_url, b.description 
+	          FROM user_libraries ul
+	          JOIN books b ON ul.book_id = b.id
+	          WHERE ul.user_id = ? AND ul.status = 'wishlist'`
+
+	rows, err := ur.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var wishlist []models.Book
+	for rows.Next() {
+		var book models.Book
+		err := rows.Scan(&book.ID, &book.Title, &book.Author, &book.CoverImageURL, &book.Description)
+		if err != nil {
+			return nil, err
+		}
+		wishlist = append(wishlist, book)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return wishlist, nil
+}
+
 
 
 // func (ur *UserRepository) AddUserLibraryEntry(ctx context.Context, entry models.UserLibrary) (int, error) {

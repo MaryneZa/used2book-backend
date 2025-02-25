@@ -32,3 +32,29 @@ type BookWithRatings struct {
     Book    Book        `json:"book"`
     Ratings BookRatings `json:"ratings"`
 }
+
+type BookReview struct {
+	ID        int       `json:"id"`
+	UserID    int       `json:"user_id"`
+    BookID    int       `json:"book_id"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+    UserProfile string  `json:"picture_profile"`
+	Rating    float32   `json:"rating"`
+	Comment   string    `json:"comment"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+
+type AddBookReview struct {
+	ID      int     `json:"id,omitempty"` // Auto-generated, no need in request
+	UserID  int     `json:"user_id,omitempty"` // Not needed in request (comes from context)
+	BookID  int     `json:"book_id"`
+	Rating  float32 `json:"rating"`
+	Comment string  `json:"comment"`
+}
+
+
+
+

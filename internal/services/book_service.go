@@ -57,6 +57,16 @@ func (bs *BookService) GetGenresByBookID(ctx context.Context, bookID int) ([]str
 	return bs.bookRepo.GetGenresByBookID(ctx, bookID)
 }
 
+func (bs *BookService) AddBookReview(ctx context.Context, userID int, bookID int, rating float32, comment string) error {
+	return bs.bookRepo.AddBookReview(ctx, userID, bookID, rating, comment)
+}
+
+func (bs *BookService) GetReviewsByBookID(ctx context.Context, bookID int) ([]models.BookReview, error) {
+	return bs.bookRepo.GetReviewsByBookID(ctx, bookID)
+}
+
+
+
 
 
 
@@ -113,4 +123,5 @@ func getGoogleSheetAPIKey() (string, error) {
     }
     return secret, nil
 }
+
 

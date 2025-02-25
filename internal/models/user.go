@@ -51,6 +51,16 @@ type GetAllUsers struct {
 	Role           string         `json:"role,omitempty" db:"role"`
 }
 
+type GetUserProfile struct {
+	ID             int            `json:"id" db:"id"`
+	FirstName           string    `json:"first_name,omitempty" db:"first_name"`
+	LastName           string    `json:"last_name,omitempty" db:"last_name"`
+	ProfilePicture string `json:"picture_profile" db:"picture_profile"`
+	BackgroundPicture string `json:"picture_background" db:"picture_background"`
+	Quote        string    `json:"quote" db:"quote"`
+	Bio       string    `json:"bio" db:"bio"`
+}
+
 type AuthUser struct {
 	Email          string `json:"email" db:"email"`
 	GoogleName     string `json:"name" db:"name"`
@@ -72,8 +82,6 @@ type OauthUser struct {
 }
 
 type UserAddLibraryForm struct {
-	ID             int            `json:"id" db:"id"`
-	UserID             int            `json:"user_id" db:"user_id"`
 	BookID             int            `json:"book_id" db:"book_id"`
 	Status          string          `json:"status" db:"status"`
 	Price		float32          `json:"price" db:"price"`
