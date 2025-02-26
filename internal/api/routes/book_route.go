@@ -31,8 +31,12 @@ func BookRoutes(db *sql.DB) http.Handler {
 
 	r := chi.NewRouter()
 
-	// Public Routes
-	r.Get("/{id:[0-9]+}", bookHandler.GetBookWithRatings) // Get book details with ratings
+	// // Public Routes
+	// r.Get("/{id:[0-9]+}", bookHandler.GetBookWithRatings) // Get book details with ratings
+	// // Protected Routes (Require Authentication)
+	// r.With(middleware.AuthMiddleware).Post("/{id:[0-9]+}/rate", bookHandler.AddOrUpdateUserRating)
+	// r.With(middleware.AuthMiddleware).Delete("/{id:[0-9]+}/rate", bookHandler.DeleteUserRating)
+
 
 	r.Get("/all-books", bookHandler.GetAllBooks) // Get book details with ratings
 	r.Get("/get-book/{id:[0-9]+}", bookHandler.GetBookByID)
@@ -43,9 +47,6 @@ func BookRoutes(db *sql.DB) http.Handler {
 	r.With(middleware.AuthMiddleware).With(middleware.AdminMiddleware(db)).Get("/book-count", bookHandler.GetBookCount) // Sync books from Google Sheets
 
 
-	// Protected Routes (Require Authentication)
-	r.With(middleware.AuthMiddleware).Post("/{id:[0-9]+}/rate", bookHandler.AddOrUpdateUserRating)
-	r.With(middleware.AuthMiddleware).Delete("/{id:[0-9]+}/rate", bookHandler.DeleteUserRating)
 
 	r.With(middleware.AuthMiddleware).Get("/{id:[0-9]+}/listings", bookHandler.GetAllListingsByBookID)
 	r.With(middleware.AuthMiddleware).Get("/{id:[0-9]+}/get-reviews", bookHandler.GetReviewsByBookIDHandler)

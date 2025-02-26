@@ -100,13 +100,17 @@ func (br *BookRepository) GetAllBooks(ctx context.Context) ([]models.Book, error
 	return books, nil
 }
 
-// GetBookByID retrieves a book by its ID from the database
+
+// GetBookByID retrieves a book by its ID, including its rating information
 func (br *BookRepository) GetBookByID(ctx context.Context, bookID int) (*models.Book, error) {
 	query := `
-    SELECT id, title, author, description, language, isbn, 
-           publisher, publish_date, cover_image_url 
-    FROM books 
-    WHERE id = ?
+    SELECT b.id, b.title, b.author, b.description, b.language, b.isbn, 
+           b.publisher, b.publish_date, b.cover_image_url,
+           COALESCE(br.average_rating, 0) AS average_rating, 
+           COALESCE(br.num_ratings, 0) AS num_ratings
+    FROM books b
+    LEFT JOIN book_ratings br ON b.id = br.book_id
+    WHERE b.id = ?
     `
 
 	// Execute the query
@@ -120,6 +124,7 @@ func (br *BookRepository) GetBookByID(ctx context.Context, bookID int) (*models.
 		&book.ID, &book.Title, &book.Author, &book.Description,
 		&book.Language, &book.ISBN, &book.Publisher,
 		&book.PublishDate, &book.CoverImageURL,
+		&book.AverageRating, &book.NumRatings, // New fields for rating
 	)
 
 	if err == sql.ErrNoRows {
@@ -132,80 +137,80 @@ func (br *BookRepository) GetBookByID(ctx context.Context, bookID int) (*models.
 }
 
 // GetBookWithRatings fetches a book along with its rating
-func (br *BookRepository) GetBookWithRatings(ctx context.Context, bookID int) (*models.BookWithRatings, error) {
-	query := `
-	SELECT b.id, b.title, b.author, b.description, b.language, b.isbn, 
-		    b.publisher, b.publish_date, b.cover_image_url, 
-		       br.average_rating, br.num_ratings
-		FROM books b
-		LEFT JOIN book_ratings br ON b.id = br.book_id
-		WHERE b.id = ?
-	`
+// func (br *BookRepository) GetBookWithRatings(ctx context.Context, bookID int) (*models.BookWithRatings, error) {
+// 	query := `
+// 	SELECT b.id, b.title, b.author, b.description, b.language, b.isbn, 
+// 		    b.publisher, b.publish_date, b.cover_image_url, 
+// 		       br.average_rating, br.num_ratings
+// 		FROM books b
+// 		LEFT JOIN book_ratings br ON b.id = br.book_id
+// 		WHERE b.id = ?
+// 	`
 
-	var bookWithRatings models.BookWithRatings
-	err := br.db.QueryRowContext(ctx, query, bookID).Scan(
-		&bookWithRatings.Book.ID, &bookWithRatings.Book.Title,
-		&bookWithRatings.Book.Author, &bookWithRatings.Book.Description, &bookWithRatings.Book.Language,
-		&bookWithRatings.Book.ISBN,
-		&bookWithRatings.Book.Publisher, &bookWithRatings.Book.PublishDate,
-		&bookWithRatings.Book.CoverImageURL, &bookWithRatings.Ratings.AverageRating,
-		&bookWithRatings.Ratings.NumRatings,
-	)
+// 	var bookWithRatings models.BookWithRatings
+// 	err := br.db.QueryRowContext(ctx, query, bookID).Scan(
+// 		&bookWithRatings.Book.ID, &bookWithRatings.Book.Title,
+// 		&bookWithRatings.Book.Author, &bookWithRatings.Book.Description, &bookWithRatings.Book.Language,
+// 		&bookWithRatings.Book.ISBN,
+// 		&bookWithRatings.Book.Publisher, &bookWithRatings.Book.PublishDate,
+// 		&bookWithRatings.Book.CoverImageURL, &bookWithRatings.Ratings.AverageRating,
+// 		&bookWithRatings.Ratings.NumRatings,
+// 	)
 
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
+// 	if err == sql.ErrNoRows {
+// 		return nil, nil
+// 	}
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	return &bookWithRatings, nil
-}
+// 	return &bookWithRatings, nil
+// }
 
-// UpdateUserBookRating allows a user to rate or edit their book rating
-func (br *BookRepository) UpdateUserBookRating(ctx context.Context, userID int, bookID int, newRating float64) error {
-	var existingRating float64
-	err := br.db.QueryRowContext(ctx, "SELECT rating FROM user_book_ratings WHERE user_id = ? AND book_id = ?", userID, bookID).Scan(&existingRating)
+// // UpdateUserBookRating allows a user to rate or edit their book rating
+// func (br *BookRepository) UpdateUserBookRating(ctx context.Context, userID int, bookID int, newRating float64) error {
+// 	var existingRating float64
+// 	err := br.db.QueryRowContext(ctx, "SELECT rating FROM user_book_ratings WHERE user_id = ? AND book_id = ?", userID, bookID).Scan(&existingRating)
 
-	if err == sql.ErrNoRows {
-		// Insert new rating
-		_, err = br.db.ExecContext(ctx, "INSERT INTO user_book_ratings (user_id, book_id, rating) VALUES (?, ?, ?)", userID, bookID, newRating)
-	} else if err == nil {
-		// Update existing rating
-		_, err = br.db.ExecContext(ctx, "UPDATE user_book_ratings SET rating = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND book_id = ?", newRating, userID, bookID)
-	} else {
-		return err
-	}
+// 	if err == sql.ErrNoRows {
+// 		// Insert new rating
+// 		_, err = br.db.ExecContext(ctx, "INSERT INTO user_book_ratings (user_id, book_id, rating) VALUES (?, ?, ?)", userID, bookID, newRating)
+// 	} else if err == nil {
+// 		// Update existing rating
+// 		_, err = br.db.ExecContext(ctx, "UPDATE user_book_ratings SET rating = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND book_id = ?", newRating, userID, bookID)
+// 	} else {
+// 		return err
+// 	}
 
-	// Recalculate the average rating
-	_, err = br.db.ExecContext(ctx, `
-		UPDATE book_ratings 
-		SET average_rating = (SELECT COALESCE(AVG(rating), 0) FROM user_book_ratings WHERE book_id = ?),
-		    num_ratings = (SELECT COUNT(*) FROM user_book_ratings WHERE book_id = ?)
-		WHERE book_id = ?
-	`, bookID, bookID, bookID)
+// 	// Recalculate the average rating
+// 	_, err = br.db.ExecContext(ctx, `
+// 		UPDATE book_ratings 
+// 		SET average_rating = (SELECT COALESCE(AVG(rating), 0) FROM user_book_ratings WHERE book_id = ?),
+// 		    num_ratings = (SELECT COUNT(*) FROM user_book_ratings WHERE book_id = ?)
+// 		WHERE book_id = ?
+// 	`, bookID, bookID, bookID)
 
-	return err
-}
+// 	return err
+// }
 
-// DeleteUserRating removes a user's rating for a book
-func (br *BookRepository) DeleteUserRating(ctx context.Context, userID int, bookID int) error {
-	// Delete user's rating from `user_book_ratings`
-	_, err := br.db.ExecContext(ctx, "DELETE FROM user_book_ratings WHERE user_id = ? AND book_id = ?", userID, bookID)
-	if err != nil {
-		return err
-	}
+// // DeleteUserRating removes a user's rating for a book
+// func (br *BookRepository) DeleteUserRating(ctx context.Context, userID int, bookID int) error {
+// 	// Delete user's rating from `user_book_ratings`
+// 	_, err := br.db.ExecContext(ctx, "DELETE FROM user_book_ratings WHERE user_id = ? AND book_id = ?", userID, bookID)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	// Recalculate average rating and number of ratings
-	_, err = br.db.ExecContext(ctx, `
-		UPDATE book_ratings 
-		SET average_rating = (SELECT COALESCE(AVG(rating), 0) FROM user_book_ratings WHERE book_id = ?),
-		    num_ratings = (SELECT COUNT(*) FROM user_book_ratings WHERE book_id = ?)
-		WHERE book_id = ?
-	`, bookID, bookID, bookID)
+// 	// Recalculate average rating and number of ratings
+// 	_, err = br.db.ExecContext(ctx, `
+// 		UPDATE book_ratings 
+// 		SET average_rating = (SELECT COALESCE(AVG(rating), 0) FROM user_book_ratings WHERE book_id = ?),
+// 		    num_ratings = (SELECT COUNT(*) FROM user_book_ratings WHERE book_id = ?)
+// 		WHERE book_id = ?
+// 	`, bookID, bookID, bookID)
 
-	return err
-}
+// 	return err
+// }
 
 // CountBooks checks how many books exist in the database
 func (br *BookRepository) CountBooks() (int, error) {
@@ -437,11 +442,40 @@ func (br *BookRepository) GetGenresByBookID(ctx context.Context, bookID int) ([]
 
 
 func (br *BookRepository) AddBookReview(ctx context.Context, userID int, bookID int, rating float32, comment string) error {
-	query := `INSERT INTO book_reviews (user_id, book_id, rating, comment, created_at, updated_at) 
-	          VALUES (?, ?, ?, ?, NOW(), NOW()) 
-	          ON DUPLICATE KEY UPDATE rating = VALUES(rating), comment = VALUES(comment), updated_at = NOW()`
+	tx, err := br.db.BeginTx(ctx, nil) // ✅ Use a transaction to ensure atomicity
+	if err != nil {
+		return err
+	}
 
-	_, err := br.db.ExecContext(ctx, query, userID, bookID, rating, comment)
-	return err
+	// ✅ Step 1: Insert or update the review
+	reviewQuery := `INSERT INTO book_reviews (user_id, book_id, rating, comment, created_at, updated_at) 
+	                VALUES (?, ?, ?, ?, NOW(), NOW()) 
+	                ON DUPLICATE KEY UPDATE rating = VALUES(rating), comment = VALUES(comment), updated_at = NOW()`
+	_, err = tx.ExecContext(ctx, reviewQuery, userID, bookID, rating, comment)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// ✅ Step 2: Recalculate average rating and number of ratings
+	ratingQuery := `
+		UPDATE book_ratings 
+		SET average_rating = (SELECT COALESCE(AVG(rating), 0) FROM book_reviews WHERE book_id = ?),
+		    num_ratings = (SELECT COUNT(*) FROM book_reviews WHERE book_id = ?)
+		WHERE book_id = ?`
+	_, err = tx.ExecContext(ctx, ratingQuery, bookID, bookID, bookID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// ✅ Commit the transaction
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
+
 

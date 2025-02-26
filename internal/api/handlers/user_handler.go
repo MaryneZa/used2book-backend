@@ -340,11 +340,61 @@ func (uh *UserHandler) GetMyListingsHandler(w http.ResponseWriter, r *http.Reque
 
 
 
-func (uh *UserHandler) GetUserLibraryHandler(w http.ResponseWriter, r *http.Request) {
+func (uh *UserHandler) GetMyLibraryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Call the BookService method to get the total book count
 	userID := r.Context().Value("user_id").(int)
 
+
+	library, err := uh.UserService.GetUserLibrary(r.Context(), userID)
+	if err != nil {
+		// Handle the error, e.g., return a 500 Internal Server Error
+		http.Error(w, "Failed to get library", http.StatusInternalServerError)
+		return
+	}
+
+	sendSuccessResponse(w, map[string]interface{}{
+		"library": library,
+	})
+	
+}
+
+func (uh *UserHandler) GetUserListingsHandler(w http.ResponseWriter, r *http.Request) {
+
+	
+	userIDStr := chi.URLParam(r, "userID")
+
+    userID, err := strconv.Atoi(userIDStr) // Convert to int
+	log.Println("userID: ", userID)
+    if err != nil {
+        sendErrorResponse(w, http.StatusBadRequest, "Invalid book ID")
+        return
+    }
+	listing, err := uh.UserService.GetMyListings(r.Context(), userID)
+	if err != nil {
+		// Handle the error, e.g., return a 500 Internal Server Error
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to get listing: "+err.Error()) // 409 Conflict if user exists
+		return
+	}
+
+	sendSuccessResponse(w, map[string]interface{}{
+		"listing": listing,
+	})
+	
+}
+
+
+
+func (uh *UserHandler) GetUserLibraryHandler(w http.ResponseWriter, r *http.Request) {
+	
+	userIDStr := chi.URLParam(r, "userID")
+
+    userID, err := strconv.Atoi(userIDStr) // Convert to int
+	log.Println("userID: ", userID)
+    if err != nil {
+        sendErrorResponse(w, http.StatusBadRequest, "Invalid book ID")
+        return
+    }
 
 	library, err := uh.UserService.GetUserLibrary(r.Context(), userID)
 	if err != nil {
@@ -418,20 +468,9 @@ func (uh *UserHandler) IsBookInWishlistHandler(w http.ResponseWriter, r *http.Re
 	})
 }
 
-func (uh *UserHandler) GetUserWishlist(w http.ResponseWriter, r *http.Request) {
-	// Parse user ID from request (e.g., query parameter or URL path)
-	userIDStr := r.URL.Query().Get("user_id")
-	if userIDStr == "" {
-		http.Error(w, "User ID is required", http.StatusBadRequest)
-		return
-	}
-
-	// Convert userID to integer
-	userID, err := strconv.Atoi(userIDStr)
-	if err != nil {
-		http.Error(w, "Invalid User ID", http.StatusBadRequest)
-		return
-	}
+func (uh *UserHandler) GetMyWishlist(w http.ResponseWriter, r *http.Request) {
+	
+	userID := r.Context().Value("user_id").(int)
 
 	// Call the UserService to get the user's wishlist
 	wishlist, err := uh.UserService.GetWishlistByUserID(r.Context(), userID)
@@ -447,10 +486,16 @@ func (uh *UserHandler) GetUserWishlist(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-
-func (uh *UserHandler) GetMyWishlist(w http.ResponseWriter, r *http.Request) {
+func (uh *UserHandler) GetUserWishlist(w http.ResponseWriter, r *http.Request) {
 	
-	userID := r.Context().Value("user_id").(int)
+	userIDStr := chi.URLParam(r, "userID")
+
+    userID, err := strconv.Atoi(userIDStr) // Convert to int
+	log.Println("userID: ", userID)
+    if err != nil {
+        sendErrorResponse(w, http.StatusBadRequest, "Invalid book ID")
+        return
+    }
 
 	// Call the UserService to get the user's wishlist
 	wishlist, err := uh.UserService.GetWishlistByUserID(r.Context(), userID)

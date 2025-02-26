@@ -25,24 +25,24 @@ func (bs *BookService) GetAllBooks(ctx context.Context) ([]models.Book, error) {
 	return bs.bookRepo.GetAllBooks(ctx)
 }
 
-// GetBookWithRatings retrieves a book with its ratings
-func (bs *BookService) GetBookWithRatings(ctx context.Context, bookID int) (*models.BookWithRatings, error) {
-	return bs.bookRepo.GetBookWithRatings(ctx, bookID)
-}
 
 func (bs *BookService) GetBookByID(ctx context.Context, bookID int) (*models.Book, error) {
 	return bs.bookRepo.GetBookByID(ctx, bookID)
 }
 
-// AddOrUpdateUserRating allows a user to add or update their rating for a book
-func (bs *BookService) AddOrUpdateUserRating(ctx context.Context, userID int, bookID int, rating float64) error {
-	return bs.bookRepo.UpdateUserBookRating(ctx, userID, bookID, rating)
-}
+// // GetBookWithRatings retrieves a book with its ratings
+// func (bs *BookService) GetBookWithRatings(ctx context.Context, bookID int) (*models.BookWithRatings, error) {
+// 	return bs.bookRepo.GetBookWithRatings(ctx, bookID)
+// }
+// // AddOrUpdateUserRating allows a user to add or update their rating for a book
+// func (bs *BookService) AddOrUpdateUserRating(ctx context.Context, userID int, bookID int, rating float64) error {
+// 	return bs.bookRepo.UpdateUserBookRating(ctx, userID, bookID, rating)
+// }
 
-// DeleteUserRating removes a user's rating for a book
-func (bs *BookService) DeleteUserRating(ctx context.Context, userID int, bookID int) error {
-	return bs.bookRepo.DeleteUserRating(ctx, userID, bookID)
-}
+// // DeleteUserRating removes a user's rating for a book
+// func (bs *BookService) DeleteUserRating(ctx context.Context, userID int, bookID int) error {
+// 	return bs.bookRepo.DeleteUserRating(ctx, userID, bookID)
+// }
 
 // SyncBooksFromGoogleSheets loads books from Google Sheets to MySQL
 func (bs *BookService) SyncBooksFromGoogleSheets(sheetID, apiKey string) error {

@@ -13,6 +13,8 @@ type Book struct {
     Publisher     string    `json:"publisher,omitempty" db:"publisher"`
     PublishDate   time.Time `json:"publish_date,omitempty" db:"publish_date"`
     CoverImageURL string    `json:"cover_image_url,omitempty" db:"cover_image_url"`
+    NumRatings    string    `json:"num_ratings,omitempty" db:"num_ratings"`
+    AverageRating string    `json:"average_rating,omitempty" db:"average_rating"`
     CreatedAt     time.Time `json:"created_at,omitempty" db:"created_at"`
     UpdatedAt     time.Time `json:"updated_at,omitempty" db:"updated_at"`
 }
