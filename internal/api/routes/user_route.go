@@ -53,6 +53,9 @@ func UserRoutes(db *sql.DB) http.Handler {
 	r.With(middleware.AuthMiddleware).Get("/book-wishlist/{bookID:[0-9]+}", userHandler.AddBookToWishListHandler)
 	r.With(middleware.AuthMiddleware).Get("/book-is-in-wishlist/{bookID:[0-9]+}", userHandler.IsBookInWishlistHandler)
 
+	r.With(middleware.AuthMiddleware).Get("/get-listing-by-id/{listingID:[0-9]+}", userHandler.GetListingWithBookByIDHandler)
+
+
 	
 
 

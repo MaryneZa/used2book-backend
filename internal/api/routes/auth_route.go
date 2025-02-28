@@ -33,6 +33,9 @@ func AuthRoutes(db *sql.DB) http.Handler {
 	
 	r.Get("/google-provider", authHandler.GoogleHandler)
 	r.Get("/callback", authHandler.GoogleCallbackHandler)
+
+	r.Post("/verify-token", authHandler.VerifyTokenHandler)
+
 	
 	r.Post("/login/email", authHandler.LoginEmailHandler)
 	r.Post("/signup/email", authHandler.SignupEmailHandler)

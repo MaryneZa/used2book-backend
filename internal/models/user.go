@@ -109,6 +109,27 @@ type UserLibrary struct {
 }
 
 
+type ListingDetails struct {
+    // Listing fields
+    ListingID    int     `json:"listing_id"`
+    SellerID     int     `json:"seller_id"`
+    BookID       int     `json:"book_id"`
+    Price        float32 `json:"price"`
+    Status       string  `json:"status"`
+    AllowOffers  bool    `json:"allow_offers"`
+
+    // Book fields
+    Title         string    `json:"title"`
+    Author        string    `json:"author"`
+    Description   string    `json:"description,omitempty"`
+    Language      string    `json:"language,omitempty"`
+    ISBN          string    `json:"isbn,omitempty"`
+    Publisher     string    `json:"publisher,omitempty"`
+    PublishDate   time.Time `json:"publish_date,omitempty"`
+    CoverImageURL string    `json:"cover_image_url,omitempty"`
+    AverageRating string    `json:"average_rating,omitempty"`
+    NumRatings    string    `json:"num_ratings,omitempty"`
+}
 
 
 // type GoogleUser struct {

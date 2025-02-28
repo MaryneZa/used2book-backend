@@ -20,9 +20,28 @@ import (
 
 type AuthHandler struct {
 	TokenService *services.TokenService
-	AuthService *services.AuthService
+	AuthService  *services.AuthService
 }
 
+func (ah * AuthHandler) VerifyTokenHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	userID, err := utils.VerifyToken(req.Token, "access") // Your existing function
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+	// Step 3: Success Response
+	sendSuccessResponse(w, map[string]interface{}{
+		"user_id" : userID,
+	})
+}
 
 // Post
 func (ah *AuthHandler) SignupEmailHandler(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +53,7 @@ func (ah *AuthHandler) SignupEmailHandler(w http.ResponseWriter, r *http.Request
 		sendErrorResponse(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	
+
 	user.Provider = "local"
 
 	// 2. Check if user with same email already exists
@@ -48,7 +67,7 @@ func (ah *AuthHandler) SignupEmailHandler(w http.ResponseWriter, r *http.Request
 	sendSuccessResponse(w, map[string]interface{}{
 		"success": true,
 		"message": "Sign up successfully!",
-		"user" : user,
+		"user":    user,
 	})
 }
 
@@ -103,8 +122,6 @@ func (ah *AuthHandler) LoginEmailHandler(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-
-
 func (ah *AuthHandler) GoogleHandler(w http.ResponseWriter, r *http.Request) {
 	oauthStateString := uniuri.New()
 	log.Printf("Login oauthStateString: %s", oauthStateString)
@@ -138,7 +155,7 @@ func (ah *AuthHandler) GoogleCallbackHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Generate a JWT token
-	accessToken, _ , _ := ah.TokenService.GenerateTokens(r.Context(), googleUser.Email)
+	accessToken, _, _ := ah.TokenService.GenerateTokens(r.Context(), googleUser.Email)
 
 	// ✅ Redirect the user back to the frontend with the token in the URL
 	redirectURL := fmt.Sprintf("http://localhost:3000/auth/callback?token=%s", accessToken)
@@ -244,7 +261,7 @@ func sendSuccessResponse(w http.ResponseWriter, data map[string]interface{}) {
 
 func sendErrorResponse(w http.ResponseWriter, statusCode int, message string) {
 
-	log.Println("error:",message)
+	log.Println("error:", message)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	response := map[string]interface{}{

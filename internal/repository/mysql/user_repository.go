@@ -464,6 +464,62 @@ func (ur *UserRepository) GetWishlistByUserID(ctx context.Context, userID int) (
 }
 
 
+func (ur *UserRepository) GetListingWithBookByID(ctx context.Context, listingID int) (*models.ListingDetails, error) {
+    query := `
+        SELECT 
+            l.id AS listing_id,
+            l.seller_id,
+            l.book_id,
+            l.price,
+            l.status,
+            l.allow_offers,
+            b.title,
+            b.author,
+            b.description,
+            b.language,
+            b.isbn,
+            b.publisher,
+            b.publish_date,
+            b.cover_image_url,
+            COALESCE(br.average_rating, 0) AS average_rating,
+            COALESCE(br.num_ratings, 0) AS num_ratings
+        FROM listings l
+        JOIN books b ON l.book_id = b.id
+        LEFT JOIN book_ratings br ON b.id = br.book_id  -- if you store ratings separately
+        WHERE l.id = ?
+        LIMIT 1
+    `
+
+    row := ur.db.QueryRowContext(ctx, query, listingID)
+
+    var details models.ListingDetails
+    err := row.Scan(
+        &details.ListingID,
+        &details.SellerID,
+        &details.BookID,
+        &details.Price,
+        &details.Status,
+        &details.AllowOffers,
+        &details.Title,
+        &details.Author,
+        &details.Description,
+        &details.Language,
+        &details.ISBN,
+        &details.Publisher,
+        &details.PublishDate,
+        &details.CoverImageURL,
+        &details.AverageRating,
+        &details.NumRatings,
+    )
+    if err == sql.ErrNoRows {
+        // No row found
+        return nil, nil
+    } else if err != nil {
+        return nil, fmt.Errorf("error retrieving listing by ID: %w", err)
+    }
+
+    return &details, nil
+}
 
 // func (ur *UserRepository) AddUserLibraryEntry(ctx context.Context, entry models.UserLibrary) (int, error) {
 // 	query := `

@@ -511,6 +511,31 @@ func (uh *UserHandler) GetUserWishlist(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (uh *UserHandler) GetListingWithBookByIDHandler(w http.ResponseWriter, r *http.Request) {
+	
+	listingIDStr := chi.URLParam(r, "listingID")
+
+    listingID, err := strconv.Atoi(listingIDStr) // Convert to int
+	log.Println("listingID: ", listingID)
+    if err != nil {
+        sendErrorResponse(w, http.StatusBadRequest, "Invalid listing ID")
+        return
+    }
+
+	// Call the UserService to get the user's wishlist
+	listing, err := uh.UserService.GetListingWithBookByID(r.Context(), listingID)
+	if err != nil {
+		// Handle the error, e.g., return a 500 Internal Server Error
+		http.Error(w, "Failed to fetch listing", http.StatusInternalServerError)
+		return
+	}
+
+	// Send the wishlist as a JSON response
+	sendSuccessResponse(w, map[string]interface{}{
+		"listing": listing,
+	})
+}
+
 // func (uh *UserHandler) EditPhoneNumberHandler(w http.ResponseWriter, r *http.Request) {
 
 // 	// 1. Parse JSON body for email, password, name, etc.

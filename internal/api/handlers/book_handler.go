@@ -283,7 +283,7 @@ func (bh *BookHandler) GetAllListingsByBookID(w http.ResponseWriter, r *http.Req
 	
 
     // Extract bookID from URL parameters
-    bookIDStr := chi.URLParam(r, "bookID")
+    bookIDStr := chi.URLParam(r, "id")
 	log.Println("bookIDStr listing:", bookIDStr)
 
     bookID, err := strconv.Atoi(bookIDStr) // Convert to int

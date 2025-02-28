@@ -87,6 +87,7 @@ func RunMigrations() {
             price DECIMAL(10,2) NOT NULL,
             status ENUM('for_sale','sold','removed') DEFAULT 'for_sale',
             allow_offers BOOLEAN DEFAULT FALSE,
+            seller_note TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (seller_id) REFERENCES users(id),

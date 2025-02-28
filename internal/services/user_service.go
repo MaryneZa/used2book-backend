@@ -86,3 +86,7 @@ func (us *UserService) GetWishlistByUserID(ctx context.Context, userID int) ([]m
 func (us *UserService) IsBookInWishlist(ctx context.Context, userID int, bookID int) (bool, error) {
 	return us.userRepo.IsBookInWishlist(ctx, userID, bookID)
 }
+
+func (us *UserService) GetListingWithBookByID(ctx context.Context, listingID int) (*models.ListingDetails, error) {
+	return us.userRepo.GetListingWithBookByID(ctx, listingID)
+}
