@@ -53,6 +53,9 @@ func BookRoutes(db *sql.DB) http.Handler {
 
 
 	r.With(middleware.AuthMiddleware).Post("/add-review", bookHandler.AddBookReviewHandler)
+	
+	r.With(middleware.AuthMiddleware).Get("/all-genres", bookHandler.GetAllGenres)
+
 
 	return r
 }

@@ -16,6 +16,11 @@ type UserHandler struct {
 	UploadService *services.UploadService
 }
 
+type CreatePaymentRequest struct {
+    ListingID int `json:"listingId"`
+    // Possibly other fields, e.g. quantity, shipping, etc.
+}
+
 func (uh *UserHandler) GetAllUsersHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Call the BookService method to get the total book count
@@ -31,6 +36,39 @@ func (uh *UserHandler) GetAllUsersHandler(w http.ResponseWriter, r *http.Request
 	})
 	
 }
+
+func (uh *UserHandler) SetUserPreferredGenresHandler(w http.ResponseWriter, r *http.Request) {
+	// Extract user ID from context
+	userID, ok := r.Context().Value("user_id").(int)
+	if !ok || userID == 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Parse request body
+	var request struct {
+		GenreIDs []int `json:"genre_ids"`
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil || len(request.GenreIDs) == 0 {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	// Call service to update preferences
+	err = uh.UserService.SetUserPreferredGenres(r.Context(), userID, request.GenreIDs)
+	if err != nil {
+		http.Error(w, "Failed to update preferences", http.StatusInternalServerError)
+		return
+	}
+
+	// Send success response
+	sendSuccessResponse(w, map[string]interface{}{
+		"message": "User preferred genres updated successfully",
+	})
+}
+
 
 func (uh *UserHandler) GetMeHandler(w http.ResponseWriter, r *http.Request) {
 	// Extract user ID from request context (set by middleware)
@@ -535,6 +573,173 @@ func (uh *UserHandler) GetListingWithBookByIDHandler(w http.ResponseWriter, r *h
 		"listing": listing,
 	})
 }
+
+// // CreateExpressAccountHandler creates a Stripe Connect Express account for the user
+// func (uh *UserHandler) CreateExpressAccountHandler(w http.ResponseWriter, r *http.Request) {
+//     // Typically, you get userID from JWT or context
+//     userID, ok := r.Context().Value("user_id").(int)
+//     if !ok || userID == 0 {
+//         sendErrorResponse(w, http.StatusUnauthorized, "Unauthorized (missing user_id)")
+//         return
+//     }
+
+//     // 1) Get user from DB (we need to confirm they don't already have an account)
+//     user, err := uh.UserService.GetMe(r.Context(), userID)
+//     if err != nil {
+//         sendErrorResponse(w, http.StatusNotFound, "User not found")
+//         return
+//     }
+
+//     // If user already has a stripe_account_id, skip creation (or create again if you prefer)
+//     if user.StripeAccountID.String != "" {
+//         // Possibly just return the existing account link or an error
+//         sendErrorResponse(w, http.StatusConflict, "User already has a Stripe account")
+//         return
+//     }
+
+//     // 2) Create a brand-new Express account
+//     accParams := &stripe.AccountParams{
+//         Type: stripe.String(string(stripe.AccountTypeExpress)),
+//         // If you know the user's country, set it:
+//         // Country: stripe.String("TH"), // e.g. for Thailand
+//     }
+//     acc, err := account.New(accParams)
+//     if err != nil {
+//         log.Println("Error creating stripe account:", err)
+//         sendErrorResponse(w, http.StatusInternalServerError, "Failed to create stripe account")
+//         return
+//     }
+
+//     // 3) Store the new acc.ID in DB
+//     //    e.g. update user with user.StripeAccountID = acc.ID
+//     err = uh.UserService.UpdateStripeAccountID(r.Context(), userID, acc.ID)
+//     if err != nil {
+//         log.Println("Error saving stripe account ID to DB:", err)
+//         sendErrorResponse(w, http.StatusInternalServerError, "Failed to store stripe account ID")
+//         return
+//     }
+
+//     // 4) Generate an Account Link so the user can fill out bank info, etc.
+//     linkParams := &stripe.AccountLinkParams{
+//         Account:    stripe.String(acc.ID),
+//         RefreshURL: stripe.String("http://localhost:3000/seller-onboarding?refresh=1"),
+//         ReturnURL:  stripe.String("http://localhost:3000/seller-onboarding-complete"),
+//         Type:       stripe.String("account_onboarding"),
+//     }
+//     link, err := accountlink.New(linkParams)
+//     if err != nil {
+//         log.Println("Error creating account link:", err)
+//         sendErrorResponse(w, http.StatusInternalServerError, "Failed to create account link")
+//         return
+//     }
+
+//     // 5) Return the onboarding link to the frontend
+//     resp := map[string]interface{}{
+//         "url":   link.URL,
+//         "accID": acc.ID, // optional
+//     }
+//     sendSuccessResponse(w, resp)
+// }
+
+// // CreatePaymentIntentHandler handles buyer purchase requests
+// func (uh *UserHandler) CreatePaymentIntentHandler(w http.ResponseWriter, r *http.Request) {
+//     // 1) Parse the JSON body to get the listingId
+//     body, err := io.ReadAll(r.Body)
+//     if err != nil {
+//         sendErrorResponse(w, http.StatusBadRequest, "Invalid body")
+//         return
+//     }
+//     var req CreatePaymentRequest
+//     if err := json.Unmarshal(body, &req); err != nil {
+//         sendErrorResponse(w, http.StatusBadRequest, "JSON decode error")
+//         return
+//     }
+
+//     // 2) Look up the listing in DB
+//     listing, err := uh.UserService.GetListingByID(r.Context(), req.ListingID)
+//     if err != nil || listing == nil {
+//         sendErrorResponse(w, http.StatusNotFound, "Listing not found")
+//         return
+//     }
+
+//     // 3) Find the seller's stripe_account_id
+//     sellerUser, err := uh.UserService.GetMe(r.Context(), listing.SellerID)
+//     if err != nil {
+//         sendErrorResponse(w, http.StatusNotFound, "Seller not found")
+//         return
+//     }
+//     if sellerUser.StripeAccountID.String == "" {
+//         sendErrorResponse(w, http.StatusBadRequest, "Seller has no stripe account")
+//         return
+//     }
+
+//     sellerAccID := sellerUser.StripeAccountID.String
+
+//     // Convert listing.Price to integer in cents
+//     // e.g. if listing.Price = 12.99 => 1299
+//     // If using THB, also multiply by 100 for satang.
+//     amount := int64(listing.Price)
+
+//     // 4) Create the PaymentIntent
+//     params := &stripe.PaymentIntentParams{
+//         Amount:   stripe.Int64(amount),
+//         Currency: stripe.String("thb"), // or "thb" if in Thailand
+//         OnBehalfOf: stripe.String(sellerAccID),
+//         TransferData: &stripe.PaymentIntentTransferDataParams{
+//             Destination: stripe.String(sellerAccID),
+//         },
+//         // If you want to take a 10% platform fee:
+//         ApplicationFeeAmount: stripe.Int64(amount / 10),
+//         PaymentMethodTypes:    stripe.StringSlice([]string{"card"}), 
+//     }
+
+//     pi, err := paymentintent.New(params)
+//     if err != nil {
+//         log.Println("Error creating payment intent:", err)
+//         sendErrorResponse(w, http.StatusInternalServerError, "Failed to create payment intent")
+//         return
+//     }
+
+//     // 5) Return the client secret to the front end
+//     resp := map[string]interface{}{
+//         "clientSecret": pi.ClientSecret,
+//     }
+//     sendSuccessResponse(w, resp)
+// }
+
+
+func (uh *UserHandler) MarkListingAsSoldHandler(w http.ResponseWriter, r *http.Request) {
+    // Get buyer ID from JWT context
+    buyerID, ok := r.Context().Value("user_id").(int)
+    if !ok || buyerID == 0 {
+        sendErrorResponse(w, http.StatusUnauthorized, "Unauthorized")
+        return
+    }
+
+    // Parse request body
+    var request struct {
+        ListingID int     `json:"listing_id"`
+        Amount    float32 `json:"amount"`
+    }
+    
+    if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+        sendErrorResponse(w, http.StatusBadRequest, "Invalid request format")
+        return
+    }
+
+    // Call service to mark listing as sold
+    err := uh.UserService.MarkListingAsSold(r.Context(), request.ListingID, buyerID, request.Amount)
+    if err != nil {
+        sendErrorResponse(w, http.StatusInternalServerError, "Failed to mark listing as sold: "+err.Error())
+        return
+    }
+
+    sendSuccessResponse(w, map[string]interface{}{
+        "success": true,
+        "message": "Listing marked as sold successfully!",
+    })
+}
+
 
 // func (uh *UserHandler) EditPhoneNumberHandler(w http.ResponseWriter, r *http.Request) {
 

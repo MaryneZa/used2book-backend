@@ -24,6 +24,15 @@ func (us *UserService) GetUserByID(ctx context.Context, userID int) (*models.Get
 	return us.userRepo.FindByID(ctx, userID)
 }
 
+func (us * UserService) UpdateOmiseAccountID(ctx context.Context, userID int, omiseAccountID string) error {
+	return us.userRepo.UpdateOmiseAccountID(ctx, userID, omiseAccountID)
+}
+
+func (us *UserService) SetUserPreferredGenres(ctx context.Context, userID int, genreIDs []int) error {
+	return us.userRepo.AddUserPreferredGenres(ctx, userID, genreIDs)
+}
+
+
 func (us *UserService) GetMe(ctx context.Context, userID int) (*models.GetMe, error) {
 
 	user, err := us.userRepo.FindByID(ctx, userID)
@@ -90,3 +99,19 @@ func (us *UserService) IsBookInWishlist(ctx context.Context, userID int, bookID 
 func (us *UserService) GetListingWithBookByID(ctx context.Context, listingID int) (*models.ListingDetails, error) {
 	return us.userRepo.GetListingWithBookByID(ctx, listingID)
 }
+
+// // UpdateStripeAccountID sets the stripe_account_id for a user
+// func (us *UserService) UpdateStripeAccountID(ctx context.Context, userID int, accountID string) error {
+//     return us.userRepo.UpdateStripeAccountID(ctx, userID, accountID)
+// }
+
+// GetListingByID looks up a single listing
+func (us *UserService) GetListingByID(ctx context.Context, listingID int) (*models.ListingDetails, error) {
+    return us.userRepo.GetListingByID(ctx, listingID)
+}
+
+func (us *UserService) MarkListingAsSold(ctx context.Context, listingID int, buyerID int, transactionAmount float32) error {
+	return us.userRepo.MarkListingAsSold(ctx, listingID, buyerID, transactionAmount)
+}
+
+

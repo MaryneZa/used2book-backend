@@ -151,7 +151,7 @@ func (ur *UserRepository) FindByID(ctx context.Context, userID int) (*models.Get
 
 	query := `
 	SELECT id, email, first_name, last_name, picture_profile, picture_background, 
-	phone_number, quote, bio, role 
+	phone_number, quote, bio, role, omise_account_id
 	FROM users 
 	WHERE id = ?
 	`
@@ -167,6 +167,7 @@ func (ur *UserRepository) FindByID(ctx context.Context, userID int) (*models.Get
 		&getMe.Quote,
 		&getMe.Bio,
 		&getMe.Role,
+		&getMe.OmiseAccountID,
 	)
 	if err != nil {
 		return nil, err
@@ -181,6 +182,48 @@ func (ur *UserRepository) FindByID(ctx context.Context, userID int) (*models.Get
 	return &getMe, nil
 }
 
+func (ur *UserRepository) AddUserPreferredGenres(ctx context.Context, userID int, genreIDs []int) error {
+	// Begin transaction
+	tx, err := ur.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	// Delete existing preferences to avoid duplicates
+	deleteQuery := `DELETE FROM user_preferred_genres WHERE user_id = ?`
+	_, err = tx.ExecContext(ctx, deleteQuery, userID)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Insert new preferred genres
+	insertQuery := `INSERT INTO user_preferred_genres (user_id, genre_id) VALUES (?, ?)`
+	stmt, err := tx.PrepareContext(ctx, insertQuery)
+	if err != nil {
+		tx.Rollback()
+		return err
+	}
+	defer stmt.Close()
+
+	for _, genreID := range genreIDs {
+		_, err := stmt.ExecContext(ctx, userID, genreID)
+		if err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	// Commit transaction
+	err = tx.Commit()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+
 func (ur *UserRepository) SaveProfileImage(userID int, imageURL string) error {
 	query := "UPDATE users SET picture_profile = ? WHERE id = ?"
 	_, err := ur.db.Exec(query, imageURL, userID)
@@ -188,6 +231,15 @@ func (ur *UserRepository) SaveProfileImage(userID int, imageURL string) error {
 		return err
 	}
 	return nil
+}
+
+func (ur *UserRepository) UpdateOmiseAccountID(ctx context.Context, userID int, omiseAccountID string) error {
+	query := `
+		UPDATE users SET omise_account_id = ?, updated_at = NOW()
+		WHERE id = ?
+	`
+	_, err := ur.db.ExecContext(ctx, query, omiseAccountID, userID)
+	return err
 }
 
 func (ur *UserRepository) SaveBackgroundImage(userID int, imageURL string) error {
@@ -520,6 +572,107 @@ func (ur *UserRepository) GetListingWithBookByID(ctx context.Context, listingID 
 
     return &details, nil
 }
+
+// // UpdateStripeAccountID sets the stripe_account_id for a user
+// func (ur *UserRepository) UpdateStripeAccountID(ctx context.Context, userID int, accountID string) error {
+//     query := `
+//         UPDATE users 
+//         SET stripe_account_id = ?
+//         WHERE id = ?
+//     `
+//     _, err := ur.db.ExecContext(ctx, query, accountID, userID)
+//     return err
+// }
+
+// GetListingByID retrieves a listing along with seller's Omise account ID
+func (ur *UserRepository) GetListingByID(ctx context.Context, listingID int) (*models.ListingDetails, error) {
+    query := `
+        SELECT 
+            l.id AS listing_id, l.seller_id, l.book_id, l.price, l.status, l.allow_offers,
+            b.title, b.author, b.description, b.language, b.isbn, b.publisher, 
+            b.publish_date, b.cover_image_url, 
+            COALESCE(br.average_rating, 0) AS average_rating, 
+            COALESCE(br.num_ratings, 0) AS num_ratings,
+            u.omise_account_id
+        FROM listings l
+        JOIN books b ON l.book_id = b.id
+        LEFT JOIN book_ratings br ON b.id = br.book_id
+        JOIN users u ON l.seller_id = u.id
+        WHERE l.id = ?
+        LIMIT 1
+    `
+
+    var listing models.ListingDetails
+    err := ur.db.QueryRowContext(ctx, query, listingID).Scan(
+        &listing.ListingID, &listing.SellerID, &listing.BookID, 
+        &listing.Price, &listing.Status, &listing.AllowOffers, 
+        &listing.Title, &listing.Author, &listing.Description, 
+        &listing.Language, &listing.ISBN, &listing.Publisher, 
+        &listing.PublishDate, &listing.CoverImageURL, 
+        &listing.AverageRating, &listing.NumRatings, 
+        &listing.SellerOmiseID, // Fetch seller's Omise account ID
+    )
+
+    if err != nil {
+        return nil, err
+    }
+
+    return &listing, nil
+}
+
+
+// MarkListingAsSold updates the status of a listing to "sold" and records the transaction
+func (ur *UserRepository) MarkListingAsSold(ctx context.Context, listingID int, buyerID int, transactionAmount float32) error {
+	// Begin a transaction to ensure atomicity
+	tx, err := ur.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+
+	// Step 1: Update listing status to 'sold'
+	updateListingQuery := `
+        UPDATE listings
+        SET status = 'sold', updated_at = NOW()
+        WHERE id = ? AND status = 'for_sale'
+    `
+	result, err := tx.ExecContext(ctx, updateListingQuery, listingID)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to update listing status: %w", err)
+	}
+
+	// Check if any row was actually updated
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to check affected rows: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		tx.Rollback()
+		return fmt.Errorf("listing is not available for sale or does not exist")
+	}
+
+	// Step 2: Insert a transaction record
+	transactionQuery := `
+        INSERT INTO transactions (buyer_id, seller_id, listing_id, transaction_amount, payment_status, created_at, updated_at)
+        SELECT ?, seller_id, ?, ?, 'completed', NOW(), NOW()
+        FROM listings WHERE id = ?
+    `
+	_, err = tx.ExecContext(ctx, transactionQuery, buyerID, listingID, transactionAmount, listingID)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to insert transaction record: %w", err)
+	}
+
+	// Commit the transaction if everything is successful
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
 
 // func (ur *UserRepository) AddUserLibraryEntry(ctx context.Context, entry models.UserLibrary) (int, error) {
 // 	query := `

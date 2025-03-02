@@ -14,29 +14,31 @@ func RunMigrations() {
 	queries := []string{
 		// Users table
 		`CREATE TABLE IF NOT EXISTS users (
-			id INT AUTO_INCREMENT PRIMARY KEY,
-			email VARCHAR(255) NOT NULL UNIQUE,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            email VARCHAR(255) NOT NULL UNIQUE,
 
-			first_name VARCHAR(255) DEFAULT '',
-			last_name VARCHAR(255) DEFAULT '',
+            first_name VARCHAR(255) DEFAULT '',
+            last_name VARCHAR(255) DEFAULT '',
 
-			provider ENUM('google','local') NOT NULL,
+            provider ENUM('google','local') NOT NULL,
             
             hashed_password VARCHAR(255),
             phone_number VARCHAR(20) DEFAULT NULL UNIQUE,
 
-			picture_profile VARCHAR(255) DEFAULT '',
-			picture_background VARCHAR(255) DEFAULT '',
+            picture_profile VARCHAR(255) DEFAULT '',
+            picture_background VARCHAR(255) DEFAULT '',
 
             gender ENUM('male', 'female', 'other') NOT NULL DEFAULT 'other',
 
             quote VARCHAR(100) DEFAULT '',
             bio VARCHAR(500) DEFAULT '',
 
-			role ENUM('user','admin') DEFAULT 'user',
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            );`,
+            omise_account_id VARCHAR(255) DEFAULT NULL, 
+
+            role ENUM('user','admin') DEFAULT 'user',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        );`,
 
 		// provider_id VARCHAR(255),
 
@@ -54,6 +56,7 @@ func RunMigrations() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         );`,
+        
 		// Create book_ratings table (stores calculated ratings)
 		`CREATE TABLE IF NOT EXISTS book_ratings (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -63,7 +66,7 @@ func RunMigrations() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
-        );`,		
+        );`,
 
 		// User Libraries table
 		`CREATE TABLE IF NOT EXISTS user_libraries (
@@ -94,7 +97,7 @@ func RunMigrations() {
             FOREIGN KEY (book_id) REFERENCES books(id)
         );`,
 
-        `CREATE TABLE IF NOT EXISTS cart (
+		`CREATE TABLE IF NOT EXISTS cart (
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,
             listing_id INT NOT NULL,
@@ -146,16 +149,16 @@ func RunMigrations() {
 
 		// // Seller Reviews table
 		// `CREATE TABLE IF NOT EXISTS seller_reviews (
-        //     id INT AUTO_INCREMENT PRIMARY KEY,
-        //     buyer_id INT NOT NULL,
-        //     seller_id INT NOT NULL,
-        //     rating INT NOT NULL,
-        //     comment TEXT,
-        //     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        //     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        //     FOREIGN KEY (buyer_id) REFERENCES users(id),
-        //     FOREIGN KEY (seller_id) REFERENCES users(id)
-        // );`,
+		//     id INT AUTO_INCREMENT PRIMARY KEY,
+		//     buyer_id INT NOT NULL,
+		//     seller_id INT NOT NULL,
+		//     rating INT NOT NULL,
+		//     comment TEXT,
+		//     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		//     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		//     FOREIGN KEY (buyer_id) REFERENCES users(id),
+		//     FOREIGN KEY (seller_id) REFERENCES users(id)
+		// );`,
 
 		// Posts table
 		`CREATE TABLE IF NOT EXISTS posts (
@@ -226,7 +229,7 @@ func RunMigrations() {
             FOREIGN KEY (post_id) REFERENCES posts(id),
             FOREIGN KEY (genre_id) REFERENCES genres(id)
         );`,
-        
+
 		`CREATE TABLE IF NOT EXISTS refresh_tokens (
 			id INT AUTO_INCREMENT PRIMARY KEY,
 			user_id INT NOT NULL,

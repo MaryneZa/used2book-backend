@@ -5,23 +5,25 @@ import (
 	"time"
 )
 
-// User represents a user in the system.
 type User struct {
-	ID             int            `json:"id" db:"id"`
-	Email          string         `json:"email" db:"email"`
-	Provider       string         `json:"provider" db:"provider"`
-	HashedPassword string         `json:"hashed_password" db:"hashed_password"`
-	ProfilePicture string `json:"picture_profile" db:"picture_profile"`
-	BackgroundPicture string `json:"picture_background" db:"picture_background"`
-	FirstName           string    `json:"first_name,omitempty" db:"first_name"`
-	LastName           string    `json:"last_name,omitempty" db:"last_name"`
-	PhoneNumber        sql.NullString    `json:"phone_number" db:"phone_number"`
-	Quote        string    `json:"quote" db:"quote"`
-	Bio       string    `json:"bio" db:"bio"`
-	Role           string         `json:"role,omitempty" db:"role"`
-	CreatedAt      time.Time      `json:"created_at" db:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at" db:"updated_at"`
+	ID              int            `json:"id" db:"id"`
+	Email           string         `json:"email" db:"email"`
+	Provider        string         `json:"provider" db:"provider"`
+	HashedPassword  string         `json:"hashed_password" db:"hashed_password"`
+	ProfilePicture  string         `json:"picture_profile" db:"picture_profile"`
+	BackgroundPicture string       `json:"picture_background" db:"picture_background"`
+	FirstName       string         `json:"first_name,omitempty" db:"first_name"`
+	LastName        string         `json:"last_name,omitempty" db:"last_name"`
+	PhoneNumber     sql.NullString `json:"phone_number" db:"phone_number"`
+	OmiseAccountID  sql.NullString `json:"omise_account_id" db:"omise_account_id"` // ✅ Added Omise account ID
+	Quote           string         `json:"quote" db:"quote"`
+	Bio             string         `json:"bio" db:"bio"`
+	Role            string         `json:"role,omitempty" db:"role"`
+	CreatedAt       time.Time      `json:"created_at" db:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at" db:"updated_at"`
 }
+
+// User represents a user in the system.
 
 type GetMe struct {
 	ID             int            `json:"id" db:"id"`
@@ -35,6 +37,8 @@ type GetMe struct {
 	Quote        string    `json:"quote" db:"quote"`
 	Bio       string    `json:"bio" db:"bio"`
 	Role           string         `json:"role,omitempty" db:"role"`
+	OmiseAccountID  sql.NullString `json:"omise_account_id" db:"omise_account_id"` // ✅ Added Omise account ID
+
 }
 
 type GetAllUsers struct {
@@ -90,17 +94,6 @@ type UserAddLibraryForm struct {
 }
 
 
-
-type UserListing struct {
-	ID         int     `json:"id" db:"id"` // Primary key
-	SellerID   int     `json:"seller_id" db:"seller_id"` // Instead of UserID (clearer meaning)
-	BookID     int     `json:"book_id" db:"book_id"` // Foreign key
-	Status     string  `json:"status" db:"status"` // Listing status
-	Price      float32 `json:"price" db:"price"` // Sale price
-	AllowOffer bool    `json:"allow_offers" db:"allow_offers"` // Boolean for offers
-}
-
-
 type UserLibrary struct {
 	ID        int    `json:"id" db:"id"` // ✅ Primary key (necessary)
 	UserID    int    `json:"user_id" db:"user_id"` // ✅ Necessary (foreign key)
@@ -109,16 +102,29 @@ type UserLibrary struct {
 }
 
 
+
+// UserListing represents a book listing for sale.
+type UserListing struct {
+	ID            int             `json:"id" db:"id"`
+	SellerID      int             `json:"seller_id" db:"seller_id"`
+	BookID        int             `json:"book_id" db:"book_id"`
+	Status        string          `json:"status" db:"status"`
+	Price         float32         `json:"price" db:"price"`
+	AllowOffer    bool            `json:"allow_offers" db:"allow_offers"`
+	SellerOmiseID sql.NullString  `json:"seller_omise_id" db:"seller_omise_id"` // ✅ Added Omise ID
+}
+
+// ListingDetails combines Listing + Book Data.
 type ListingDetails struct {
-    // Listing fields
     ListingID    int     `json:"listing_id"`
     SellerID     int     `json:"seller_id"`
+    SellerOmiseID sql.NullString `json:"seller_omise_id" db:"seller_omise_id"` // ✅ Seller's Omise ID
     BookID       int     `json:"book_id"`
     Price        float32 `json:"price"`
     Status       string  `json:"status"`
     AllowOffers  bool    `json:"allow_offers"`
 
-    // Book fields
+    // Book details
     Title         string    `json:"title"`
     Author        string    `json:"author"`
     Description   string    `json:"description,omitempty"`

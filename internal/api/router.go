@@ -38,6 +38,7 @@ func SetupRouter(db *sql.DB) http.Handler {
 	r.Mount("/user", routes.UserRoutes(db))
 	r.Mount("/book", routes.BookRoutes(db))
 	r.Mount("/auth-token", routes.TokenRoutes(db))
+	r.Mount("/payment", routes.PaymentRoutes(db))
 
 	// ✅ Debugging: Print all registered routes
 	fmt.Println("🔍 Registered Routes:")

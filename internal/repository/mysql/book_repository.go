@@ -478,4 +478,27 @@ func (br *BookRepository) AddBookReview(ctx context.Context, userID int, bookID 
 	return nil
 }
 
+func (br *BookRepository) GetAllGenres(ctx context.Context) ([]models.Genre, error) {
+	query := `SELECT id, name FROM genres ORDER BY name ASC`
 
+	rows, err := br.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var genres []models.Genre
+	for rows.Next() {
+		var genre models.Genre
+		if err := rows.Scan(&genre.ID, &genre.Name); err != nil {
+			return nil, err
+		}
+		genres = append(genres, genre)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return genres, nil
+}

@@ -57,6 +57,10 @@ type AddBookReview struct {
 	Comment string  `json:"comment"`
 }
 
+type Genre struct {
+	ID      int     `json:"id,omitempty"` // Auto-generated, no need in request
+	Name      int     `json:"name,omitempty"` // Auto-generated, no need in request
+}
 
 
 

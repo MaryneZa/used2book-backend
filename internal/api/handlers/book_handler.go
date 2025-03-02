@@ -37,6 +37,22 @@ func (bh *BookHandler) GetAllBooks(w http.ResponseWriter, r *http.Request) {
 	
 }
 
+func (bh *BookHandler) GetAllGenres(w http.ResponseWriter, r *http.Request) {
+
+	// Call the BookService method to get the total book count
+	genres, err := bh.BookService.GetAllGenres(r.Context())
+	if err != nil {
+		// Handle the error, e.g., return a 500 Internal Server Error
+		http.Error(w, "Failed to get all genres", http.StatusInternalServerError)
+		return
+	}
+
+	sendSuccessResponse(w, map[string]interface{}{
+		"genres": genres,
+	})
+	
+}
+
 func (bh *BookHandler) GetReviewsByBookIDHandler(w http.ResponseWriter, r *http.Request) {
 	
 	body, _ := io.ReadAll(r.Body)

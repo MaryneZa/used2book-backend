@@ -55,20 +55,15 @@ func UserRoutes(db *sql.DB) http.Handler {
 
 	r.With(middleware.AuthMiddleware).Get("/get-listing-by-id/{listingID:[0-9]+}", userHandler.GetListingWithBookByIDHandler)
 
-
-	
-
-
-
-
-
 	r.Get("/all-users", userHandler.GetAllUsersHandler)
-
 
 	r.With(middleware.AuthMiddleware).With(middleware.AdminMiddleware(db)).Get("/user-count", userHandler.GetUserCount) // Sync books from Google Sheets
 
 	// r.With(middleware.AuthMiddleware).Post("/edit-phone-number", userHandler.EditPhoneNumberHandler)
 
+	r.With(middleware.AuthMiddleware).Post("/listing/sold", userHandler.MarkListingAsSoldHandler)
+
+	r.With(middleware.AuthMiddleware).Post("/users/preferences", userHandler.SetUserPreferredGenresHandler)
 
 
 	return r
