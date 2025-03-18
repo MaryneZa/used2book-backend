@@ -58,8 +58,13 @@ type AddBookReview struct {
 }
 
 type Genre struct {
-	ID      int     `json:"id,omitempty"` // Auto-generated, no need in request
-	Name      int     `json:"name,omitempty"` // Auto-generated, no need in request
+	ID      int     `json:"id,omitempty" db:"id"` // Auto-generated, no need in request
+	Name      string    `json:"name,omitempty" db:"name"` // Auto-generated, no need in request
+}
+
+type BookGenre struct {
+	BookID  int     `json:"book_id"`
+    GenreID int     `json:"genre_id"`
 }
 
 

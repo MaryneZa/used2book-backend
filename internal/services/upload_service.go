@@ -34,6 +34,16 @@ func (s *UploadService) UploadProfileImage(userID int, file io.Reader, fileName 
 	return uploadURL, nil
 }
 
+func (s *UploadService) UploadPostImageURL(file io.Reader, fileName string) (string, error) {
+	// ✅ Upload to ImageKit.io
+	uploadURL, err := utils.UploadToImageKit(file, fileName)
+	if err != nil {
+		return "", fmt.Errorf("upload failed: %v", err)
+	}
+
+	return uploadURL, nil
+}
+
 // ✅ UploadProfileImage uploads an image & saves the URL
 func (s *UploadService) UploadBackgroundImage(userID int, file io.Reader, fileName string) (string, error) {
 	// ✅ Upload to ImageKit.io

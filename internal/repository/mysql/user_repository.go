@@ -6,6 +6,8 @@ import (
 	"log"
 	"used2book-backend/internal/models"
 	"fmt"
+	"errors"
+	"time"
 )
 
 type UserRepository struct {
@@ -77,6 +79,78 @@ func (ur *UserRepository) FindByEmail(ctx context.Context, email string) (*model
 	}
 	return &user, nil
 }
+func (ur *UserRepository) GetGender(ctx context.Context, userID int) ( string, error) {
+	var gender string
+	query := "SELECT gender FROM users WHERE id = ?"
+
+	err := ur.db.QueryRowContext(ctx, query, userID).Scan(
+		gender,
+	)
+	if err == sql.ErrNoRows {
+		return "", err
+	}
+	if err != nil {
+		return "", err
+	}
+	return gender, nil
+}
+
+
+// Updated UserRepository
+func (ur *UserRepository) GetAllUserReview(ctx context.Context) ([]models.UserReview, error) {
+	query := `
+        SELECT id, user_id, book_id, rating
+        FROM book_reviews
+    `
+
+	rows, err := ur.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("error querying book_reviews: %w", err)
+	}
+	defer rows.Close()
+
+	var userReviews []models.UserReview
+	for rows.Next() {
+		var userReview models.UserReview
+		if err := rows.Scan(&userReview.ID, &userReview.UserID, &userReview.BookID, &userReview.Rating); err != nil {
+			return nil, fmt.Errorf("error scanning review: %w", err)
+		}
+		userReviews = append(userReviews, userReview)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating reviews: %w", err)
+	}
+
+	return userReviews, nil
+}
+
+func (ur *UserRepository) GetAllUserPreferred(ctx context.Context) ([]models.UserPreferred, error) {
+	query := `SELECT user_id, genre_id FROM user_preferred_genres`
+
+	rows, err := ur.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("error querying user_preferred_genres: %w", err)
+	}
+	defer rows.Close()
+
+	var userPreferreds []models.UserPreferred
+	for rows.Next() {
+		var userPreferred models.UserPreferred
+		if err := rows.Scan(&userPreferred.UserID, &userPreferred.GenreID); err != nil {
+			return nil, fmt.Errorf("error scanning review: %w", err)
+		}
+		userPreferreds = append(userPreferreds, userPreferred)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating user_preferred_genres: %w", err)
+	}
+
+	return userPreferreds, nil
+}
+
+
 
 func (ur *UserRepository) Create(ctx context.Context, user *models.User) (int, error) {
 	query := `INSERT INTO users (first_name, last_name, email, hashed_password, provider, role, created_at, updated_at) VALUES (?,?, ?, ?, ?, ?, ?, ?)`
@@ -151,7 +225,7 @@ func (ur *UserRepository) FindByID(ctx context.Context, userID int) (*models.Get
 
 	query := `
 	SELECT id, email, first_name, last_name, picture_profile, picture_background, 
-	phone_number, quote, bio, role, omise_account_id
+	phone_number, quote, bio, role, omise_account_id, gender
 	FROM users 
 	WHERE id = ?
 	`
@@ -168,6 +242,7 @@ func (ur *UserRepository) FindByID(ctx context.Context, userID int) (*models.Get
 		&getMe.Bio,
 		&getMe.Role,
 		&getMe.OmiseAccountID,
+		&getMe.Gender,
 	)
 	if err != nil {
 		return nil, err
@@ -181,6 +256,38 @@ func (ur *UserRepository) FindByID(ctx context.Context, userID int) (*models.Get
 	}
 	return &getMe, nil
 }
+
+func (ur *UserRepository) GetUserPreferredGenres(ctx context.Context, userID int) ([]models.Genre, error) {
+	query := `
+	SELECT g.id, g.name 
+	FROM user_preferred_genres upg
+	JOIN genres g ON upg.genre_id = g.id
+	WHERE upg.user_id = ?
+	`
+
+	rows, err := ur.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var preferredGenres []models.Genre
+	for rows.Next() {
+		var genre models.Genre
+		if err := rows.Scan(&genre.ID, &genre.Name); err != nil {
+			return nil, err
+		}
+		preferredGenres = append(preferredGenres, genre)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return preferredGenres, nil
+}
+
+
 
 func (ur *UserRepository) AddUserPreferredGenres(ctx context.Context, userID int, genreIDs []int) error {
 	// Begin transaction
@@ -223,6 +330,31 @@ func (ur *UserRepository) AddUserPreferredGenres(ctx context.Context, userID int
 	return nil
 }
 
+func (ur *UserRepository) UpdateGender(ctx context.Context, userID int, gender string) error {
+    query := `UPDATE users SET gender = ? WHERE id = ?`
+    result, err := ur.db.ExecContext(ctx, query, gender, userID)
+    if err != nil {
+        log.Printf("Error updating gender: %v", err)
+        return err
+    }
+    rowsAffected, err := result.RowsAffected()
+    if err != nil {
+        log.Printf("Error getting rows affected: %v", err)
+        return err
+    }
+    log.Printf("Rows affected: %d for userID %d", rowsAffected, userID)
+    // Optionally check if user exists, but don't fail if no rows changed
+    var exists int
+    err = ur.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users WHERE id = ?", userID).Scan(&exists)
+    if err != nil {
+        log.Printf("Error checking user existence: %v", err)
+        return err
+    }
+    if exists == 0 {
+        return errors.New("no user found with the given ID")
+    }
+    return nil // Success even if rowsAffected == 0
+}
 
 func (ur *UserRepository) SaveProfileImage(userID int, imageURL string) error {
 	query := "UPDATE users SET picture_profile = ? WHERE id = ?"
@@ -233,14 +365,17 @@ func (ur *UserRepository) SaveProfileImage(userID int, imageURL string) error {
 	return nil
 }
 
-func (ur *UserRepository) UpdateOmiseAccountID(ctx context.Context, userID int, omiseAccountID string) error {
-	query := `
-		UPDATE users SET omise_account_id = ?, updated_at = NOW()
-		WHERE id = ?
-	`
-	_, err := ur.db.ExecContext(ctx, query, omiseAccountID, userID)
-	return err
-}
+// func (ur *UserRepository) SavePostImage(ctx context.Context, postID int, imageURL string) error {
+//     query := `
+//         INSERT INTO post_images (post_id, image_url)
+//         VALUES (?, ?)
+//     `
+//     _, err := ur.db.ExecContext(ctx, query, postID, imageURL)
+//     if err != nil {
+//         return fmt.Errorf("failed to save post image: %v", err)
+//     }
+//     return nil
+// }
 
 func (ur *UserRepository) SaveBackgroundImage(userID int, imageURL string) error {
 	query := "UPDATE users SET picture_background = ? WHERE id = ?"
@@ -588,7 +723,7 @@ func (ur *UserRepository) GetListingWithBookByID(ctx context.Context, listingID 
 func (ur *UserRepository) GetListingByID(ctx context.Context, listingID int) (*models.ListingDetails, error) {
     query := `
         SELECT 
-            l.id AS listing_id, l.seller_id, l.book_id, l.price, l.status, l.allow_offers,
+            l.id AS listing_id, l.seller_id, l.book_id, l.price, l.status, l.allow_offers, l.seller_omise_id,
             b.title, b.author, b.description, b.language, b.isbn, b.publisher, 
             b.publish_date, b.cover_image_url, 
             COALESCE(br.average_rating, 0) AS average_rating, 
@@ -605,7 +740,7 @@ func (ur *UserRepository) GetListingByID(ctx context.Context, listingID int) (*m
     var listing models.ListingDetails
     err := ur.db.QueryRowContext(ctx, query, listingID).Scan(
         &listing.ListingID, &listing.SellerID, &listing.BookID, 
-        &listing.Price, &listing.Status, &listing.AllowOffers, 
+        &listing.Price, &listing.Status, &listing.AllowOffers, &listing.SellerOmiseID,
         &listing.Title, &listing.Author, &listing.Description, 
         &listing.Language, &listing.ISBN, &listing.Publisher, 
         &listing.PublishDate, &listing.CoverImageURL, 
@@ -622,55 +757,610 @@ func (ur *UserRepository) GetListingByID(ctx context.Context, listingID int) (*m
 
 
 // MarkListingAsSold updates the status of a listing to "sold" and records the transaction
-func (ur *UserRepository) MarkListingAsSold(ctx context.Context, listingID int, buyerID int, transactionAmount float32) error {
-	// Begin a transaction to ensure atomicity
-	tx, err := ur.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to start transaction: %w", err)
-	}
+// func (ur *UserRepository) MarkListingAsSold(ctx context.Context, listingID int, buyerID int, transactionAmount float32) error {
+// 	// Begin a transaction to ensure atomicity
+// 	tx, err := ur.db.BeginTx(ctx, nil)
+// 	if err != nil {
+// 		return fmt.Errorf("failed to start transaction: %w", err)
+// 	}
 
-	// Step 1: Update listing status to 'sold'
-	updateListingQuery := `
-        UPDATE listings
-        SET status = 'sold', updated_at = NOW()
+// 	// Step 1: Update listing status to 'sold'
+// 	updateListingQuery := `
+//         UPDATE listings
+//         SET status = 'sold', updated_at = NOW()
+//         WHERE id = ? AND status = 'for_sale'
+//     `
+// 	result, err := tx.ExecContext(ctx, updateListingQuery, listingID)
+// 	if err != nil {
+// 		tx.Rollback()
+// 		return fmt.Errorf("failed to update listing status: %w", err)
+// 	}
+
+// 	// Check if any row was actually updated
+// 	rowsAffected, err := result.RowsAffected()
+// 	if err != nil {
+// 		tx.Rollback()
+// 		return fmt.Errorf("failed to check affected rows: %w", err)
+// 	}
+
+// 	if rowsAffected == 0 {
+// 		tx.Rollback()
+// 		return fmt.Errorf("listing is not available for sale or does not exist")
+// 	}
+
+// 	// Step 2: Insert a transaction record
+// 	transactionQuery := `
+//         INSERT INTO transactions (buyer_id, seller_id, listing_id, transaction_amount, payment_status, created_at, updated_at)
+//         SELECT ?, seller_id, ?, ?, 'completed', NOW(), NOW()
+//         FROM listings WHERE id = ?
+//     `
+// 	_, err = tx.ExecContext(ctx, transactionQuery, buyerID, listingID, transactionAmount, listingID)
+// 	if err != nil {
+// 		tx.Rollback()
+// 		return fmt.Errorf("failed to insert transaction record: %w", err)
+// 	}
+
+// 	// Commit the transaction if everything is successful
+// 	if err := tx.Commit(); err != nil {
+// 		return fmt.Errorf("failed to commit transaction: %w", err)
+// 	}
+
+// 	return nil
+// }
+
+// AddToCart adds a listing to a user's cart
+func (ur *UserRepository) AddToCart(ctx context.Context, userID int, listingID int) (int, error) {
+    // First, verify that the listing exists and is available
+    var status string
+    checkQuery := `
+        SELECT status 
+        FROM listings 
         WHERE id = ? AND status = 'for_sale'
     `
-	result, err := tx.ExecContext(ctx, updateListingQuery, listingID)
+    err := ur.db.QueryRowContext(ctx, checkQuery, listingID).Scan(&status)
+    if err == sql.ErrNoRows {
+        return 0, fmt.Errorf("listing %d is not available or does not exist", listingID)
+    }
+    if err != nil {
+        return 0, fmt.Errorf("error checking listing availability: %w", err)
+    }
+
+    // Check if the listing is already in the user's cart
+    var existingCount int
+    countQuery := `
+        SELECT COUNT(*) 
+        FROM cart 
+        WHERE user_id = ? AND listing_id = ?
+    `
+    err = ur.db.QueryRowContext(ctx, countQuery, userID, listingID).Scan(&existingCount)
+    if err != nil {
+        return 0, fmt.Errorf("error checking existing cart entry: %w", err)
+    }
+
+    if existingCount > 0 {
+        return 0, fmt.Errorf("listing %d is already in user %d's cart", listingID, userID)
+    }
+
+    // Insert the listing into the cart
+    insertQuery := `
+        INSERT INTO cart (user_id, listing_id, created_at)
+        VALUES (?, ?, NOW())
+    `
+    result, err := ur.db.ExecContext(ctx, insertQuery, userID, listingID)
+    if err != nil {
+        return 0, fmt.Errorf("failed to add listing to cart: %w", err)
+    }
+
+    id, err := result.LastInsertId()
+    if err != nil {
+        return 0, fmt.Errorf("failed to get cart entry ID: %w", err)
+    }
+
+    log.Printf("Successfully added listing %d to user %d's cart with cart ID %d", listingID, userID, id)
+    return int(id), nil
+}
+// GetCart retrieves all listings in a user's cart
+func (ur *UserRepository) GetCart(ctx context.Context, userID int) ([]models.CartItem, error) {
+    query := `
+        SELECT 
+            c.id,
+            c.user_id,
+            c.listing_id,
+            l.book_id,
+            l.price,
+            l.allow_offers,
+			l.seller_id,
+            b.title,
+            b.author,
+            b.cover_image_url
+        FROM cart c
+        JOIN listings l ON c.listing_id = l.id
+        JOIN books b ON l.book_id = b.id
+        WHERE c.user_id = ? AND l.status = 'for_sale'
+    `
+	
+
+    rows, err := ur.db.QueryContext(ctx, query, userID)
+    if err != nil {
+        return nil, fmt.Errorf("error querying cart: %w", err)
+    }
+    defer rows.Close()
+
+    var cartItems []models.CartItem
+    for rows.Next() {
+        var item models.CartItem
+        err := rows.Scan(
+            &item.ID,
+            &item.UserID,
+            &item.ListingID,
+            &item.BookID,
+            &item.Price,
+            &item.AllowOffers,
+			&item.SellerID,
+            &item.BookTitle,
+            &item.BookAuthor,
+            &item.CoverImageURL,
+        )
+        if err != nil {
+            return nil, fmt.Errorf("error scanning cart item: %w", err)
+        }
+        cartItems = append(cartItems, item)
+    }
+
+    if err = rows.Err(); err != nil {
+        return nil, fmt.Errorf("error iterating cart items: %w", err)
+    }
+
+    return cartItems, nil
+}
+
+// RemoveFromCart removes a listing from a user's cart
+func (ur *UserRepository) RemoveFromCart(ctx context.Context, userID int, listingID int) error {
+    query := `
+        DELETE FROM cart 
+        WHERE user_id = ? AND listing_id = ?
+    `
+    result, err := ur.db.ExecContext(ctx, query, userID, listingID)
+    if err != nil {
+        return fmt.Errorf("failed to remove from cart: %w", err)
+    }
+
+    rowsAffected, err := result.RowsAffected()
+    if err != nil {
+        return fmt.Errorf("error checking rows affected: %w", err)
+    }
+    if rowsAffected == 0 {
+        return fmt.Errorf("no cart entry found for user %d and listing %d", userID, listingID)
+    }
+
+    log.Printf("Removed listing %d from user %d's cart", listingID, userID)
+    return nil
+}
+
+
+
+
+// // GetListingByID fetches a listing by ID
+// func (ur *UserRepository) GetListingByID(ctx context.Context, listingID int) (*models.UserListing, error) {
+// 	query := `SELECT id, seller_id, book_id, status, price, allow_offers, seller_omise_id 
+// 	          FROM listings WHERE id = ?`
+// 	row := ur.db.QueryRowContext(ctx, query, listingID)
+// 	l := &models.UserListing{}
+// 	err := row.Scan(&l.ID, &l.SellerID, &l.BookID, &l.Status, &l.Price, &l.AllowOffer, &l.SellerOmiseID)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return l, nil
+// }
+
+// ReserveListing reserves a listing atomically with a timeout
+func (ur *UserRepository) ReserveListing(ctx context.Context, listingID int, timeoutMinutes int) (bool, error) {
+	expiresAt := time.Now().Add(time.Duration(timeoutMinutes) * time.Minute)
+	tx, err := ur.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to update listing status: %w", err)
+		return false, err
+	}
+	defer tx.Rollback()
+
+	// Lock the row and check status
+	query := `SELECT status FROM listings WHERE id = ? FOR UPDATE`
+	var status string
+	err = tx.QueryRowContext(ctx, query, listingID).Scan(&status)
+	if err != nil {
+		return false, err
+	}
+	if status != "for_sale" {
+		return false, nil // Listing not available
 	}
 
-	// Check if any row was actually updated
+	// Reserve it
+	query = `UPDATE listings SET status = 'reserved_sale', reserved_expires_at = ?, updated_at = NOW() WHERE id = ?`
+	result, err := tx.ExecContext(ctx, query, expiresAt, listingID)
+	if err != nil {
+		return false, err
+	}
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to check affected rows: %w", err)
+		return false, err
 	}
-
 	if rowsAffected == 0 {
-		tx.Rollback()
-		return fmt.Errorf("listing is not available for sale or does not exist")
+		return false, fmt.Errorf("listing %d update failed", listingID)
 	}
 
-	// Step 2: Insert a transaction record
-	transactionQuery := `
-        INSERT INTO transactions (buyer_id, seller_id, listing_id, transaction_amount, payment_status, created_at, updated_at)
-        SELECT ?, seller_id, ?, ?, 'completed', NOW(), NOW()
-        FROM listings WHERE id = ?
-    `
-	_, err = tx.ExecContext(ctx, transactionQuery, buyerID, listingID, transactionAmount, listingID)
+	err = tx.Commit()
 	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to insert transaction record: %w", err)
+		return false, err
 	}
+	return true, nil
+}
 
-	// Commit the transaction if everything is successful
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+// MarkListingAsSold updates the listing status to sold
+func (ur *UserRepository) MarkListingAsSold(ctx context.Context, listingID, buyerID int, amount float64) error {
+	query := `UPDATE listings SET status = 'sold', reserved_expires_at = NULL, updated_at = NOW() 
+	          WHERE id = ? AND status = 'reserved_sale'`
+	result, err := ur.db.ExecContext(ctx, query, listingID)
+	if err != nil {
+		return err
 	}
-
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("listing %d is not in reserved_sale state", listingID)
+	}
 	return nil
+}
+
+// ExpireReservedListing reverts a listing to for_sale if payment isn’t completed
+func (ur *UserRepository) ExpireReservedListing(ctx context.Context, listingID int) error {
+	query := `UPDATE listings SET status = 'for_sale', reserved_expires_at = NULL, updated_at = NOW() 
+	          WHERE id = ? AND status = 'reserved_sale' AND reserved_expires_at <= NOW()`
+	result, err := ur.db.ExecContext(ctx, query, listingID)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected > 0 {
+		query = `UPDATE transactions SET payment_status = 'failed', updated_at = NOW() 
+		         WHERE listing_id = ? AND payment_status = 'reserved'`
+		_, err = ur.db.ExecContext(ctx, query, listingID)
+	}
+	log.Println("/ delete / clean result:", result)
+	return err
+}
+
+// CreateTransaction records a new transaction
+func (ur *UserRepository) CreateTransaction(ctx context.Context, buyerID, sellerID, listingID int, amount float64, status string) error {
+	query := `INSERT INTO transactions (buyer_id, seller_id, listing_id, transaction_amount, payment_status, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, NOW(), NOW())`
+	_, err := ur.db.ExecContext(ctx, query, buyerID, sellerID, listingID, amount, status)
+	return err
+}
+
+// UpdateTransactionStatus updates the transaction status
+func (ur *UserRepository) UpdateTransactionStatus(ctx context.Context, listingID int, status string) error {
+	query := `UPDATE transactions SET payment_status = ?, updated_at = NOW() 
+	          WHERE listing_id = ? AND payment_status = 'reserved'`
+	_, err := ur.db.ExecContext(ctx, query, status, listingID)
+	return err
+}
+
+
+// UpdateOmiseAccountID updates the user's Omise account ID
+func (ur *UserRepository) UpdateOmiseAccountID(ctx context.Context, userID int, recipientID string) error {
+	query := `UPDATE users SET omise_account_id = ?, updated_at = NOW() WHERE id = ?`
+	_, err := ur.db.ExecContext(ctx, query, recipientID, userID)
+	return err
+}
+
+// CleanupExpiredListings runs as a background job
+func (ur *UserRepository) CleanupExpiredListings(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			query := `SELECT id FROM listings WHERE status = 'reserved_sale' AND reserved_expires_at <= NOW()`
+			rows, err := ur.db.QueryContext(ctx, query)
+			if err != nil {
+				log.Println("❌ Cleanup Error:", err)
+				continue
+			}
+			var listingIDs []int
+			for rows.Next() {
+				var id int
+				if err := rows.Scan(&id); err != nil {
+					log.Println("❌ Scan Error:", err)
+					continue
+				}
+				listingIDs = append(listingIDs, id)
+			}
+			rows.Close()
+			for _, id := range listingIDs {
+				if err := ur.ExpireReservedListing(ctx, id); err != nil {
+					log.Println("❌ Expire Error for listing", id, ":", err)
+				}
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// IsListingReserved checks if a listing is reserved and still active
+func (ur *UserRepository) IsListingReserved(ctx context.Context, listingID int) (bool, bool, error) {
+	query := `SELECT status, reserved_expires_at FROM listings WHERE id = ?`
+	var status string
+	var expiresAt sql.NullTime
+	err := ur.db.QueryRowContext(ctx, query, listingID).Scan(&status, &expiresAt)
+	if err == sql.ErrNoRows {
+		return false, false, nil // Listing doesn’t exist
+	}
+	if err != nil {
+		return false, false, fmt.Errorf("error checking listing reservation: %w", err)
+	}
+
+	if status != "reserved_sale" {
+		return false, false, nil // Not reserved
+	}
+
+	if !expiresAt.Valid || expiresAt.Time.Before(time.Now()) {
+		return true, true, nil // Reserved but expired
+	}
+
+	return true, false, nil // Reserved and active
+}
+
+func (ur *UserRepository) CreatePost(ctx context.Context, userID int, content string, imageURLs []string) (models.Post, error) {
+
+    // Insert post
+    query := `
+        INSERT INTO posts (user_id, content, created_at)
+        VALUES (?, ?, NOW())
+    `
+    result, err := ur.db.ExecContext(ctx, query, userID, content)
+    if err != nil {
+        return models.Post{}, err
+    }
+
+    postID, err := result.LastInsertId()
+    if err != nil {
+        return models.Post{}, err
+    }
+
+    // Insert image URLs
+	// Insert image URLs only if provided
+    if len(imageURLs) > 0 {
+		for _, url := range imageURLs {
+			_, err := ur.db.ExecContext(ctx, "INSERT INTO post_images (post_id, image_url) VALUES (?, ?)", postID, url)
+			if err != nil {
+				return models.Post{}, err
+			}
+		}
+	}
+
+    post := models.Post{
+        ID:        int(postID),
+        UserID:    userID,
+        Content:   content,
+        ImageURLs: imageURLs,
+        CreatedAt: time.Now(),
+    }
+    return post, nil
+}
+
+// Optional: Fetch post with images
+func (ur *UserRepository) GetPost(ctx context.Context, id int) (models.Post, error) {
+    var post models.Post
+
+    // Fetch post details
+    row := ur.db.QueryRowContext(ctx, "SELECT id, user_id, content, created_at FROM posts WHERE id = ?", id)
+    err := row.Scan(&post.ID, &post.UserID, &post.Content, &post.CreatedAt)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return models.Post{}, sql.ErrNoRows // Let caller handle "not found"
+        }
+        return models.Post{}, err
+    }
+
+    // Fetch image URLs
+    rows, err := ur.db.QueryContext(ctx, "SELECT image_url FROM post_images WHERE post_id = ?", id)
+    if err != nil {
+        return models.Post{}, err
+    }
+    defer rows.Close()
+
+    var imageURLs []string
+    for rows.Next() {
+        var url string
+        if err := rows.Scan(&url); err != nil {
+            return models.Post{}, err
+        }
+        imageURLs = append(imageURLs, url)
+    }
+    if err = rows.Err(); err != nil {
+        return models.Post{}, err
+    }
+
+    post.ImageURLs = imageURLs
+    return post, nil
+}
+
+// GetAllPosts fetches all posts with their image URLs
+func (ur *UserRepository) GetAllPosts(ctx context.Context) ([]models.Post, error) {
+    // Fetch all posts
+    rows, err := ur.db.QueryContext(ctx, "SELECT id, user_id, content, created_at FROM posts ORDER BY created_at DESC")
+    if err != nil {
+        return nil, fmt.Errorf("failed to fetch posts: %v", err)
+    }
+    defer rows.Close()
+
+    var posts []models.Post
+    for rows.Next() {
+        var post models.Post
+        if err := rows.Scan(&post.ID, &post.UserID, &post.Content, &post.CreatedAt); err != nil {
+            return nil, fmt.Errorf("failed to scan post: %v", err)
+        }
+
+        // Fetch image URLs for this post
+        imageRows, err := ur.db.QueryContext(ctx, "SELECT image_url FROM post_images WHERE post_id = ?", post.ID)
+        if err != nil {
+            return nil, fmt.Errorf("failed to fetch images for post %d: %v", post.ID, err)
+        }
+        defer imageRows.Close()
+
+        var imageURLs []string
+        for imageRows.Next() {
+            var url string
+            if err := imageRows.Scan(&url); err != nil {
+                return nil, fmt.Errorf("failed to scan image URL: %v", err)
+            }
+            imageURLs = append(imageURLs, url)
+        }
+        if err = imageRows.Err(); err != nil {
+            return nil, err
+        }
+        post.ImageURLs = imageURLs
+        posts = append(posts, post)
+    }
+    if err = rows.Err(); err != nil {
+        return nil, err
+    }
+
+    return posts, nil
+}
+
+// GetPostsByUserID fetches all posts by a specific user with their image URLs
+func (ur *UserRepository) GetPostsByUserID(ctx context.Context, userID int) ([]models.Post, error) {
+    rows, err := ur.db.QueryContext(ctx, "SELECT id, user_id, content, created_at FROM posts WHERE user_id = ? ORDER BY created_at DESC", userID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to fetch posts for user %d: %v", userID, err)
+    }
+    defer rows.Close()
+
+    var posts []models.Post
+    for rows.Next() {
+        var post models.Post
+        if err := rows.Scan(&post.ID, &post.UserID, &post.Content, &post.CreatedAt); err != nil {
+            return nil, fmt.Errorf("failed to scan post: %v", err)
+        }
+
+        // Fetch image URLs
+        imageRows, err := ur.db.QueryContext(ctx, "SELECT image_url FROM post_images WHERE post_id = ?", post.ID)
+        if err != nil {
+            return nil, fmt.Errorf("failed to fetch images for post %d: %v", post.ID, err)
+        }
+        defer imageRows.Close()
+
+        var imageURLs []string
+        for imageRows.Next() {
+            var url string
+            if err := imageRows.Scan(&url); err != nil {
+                return nil, fmt.Errorf("failed to scan image URL: %v", err)
+            }
+            imageURLs = append(imageURLs, url)
+        }
+        if err = imageRows.Err(); err != nil {
+            return nil, err
+        }
+        post.ImageURLs = imageURLs
+        posts = append(posts, post)
+    }
+    if err = rows.Err(); err != nil {
+        return nil, err
+    }
+
+    return posts, nil
+}
+
+// GetPostByPostID fetches a single post by its ID with image URLs
+func (ur *UserRepository) GetPostByPostID(ctx context.Context, postID int) (models.Post, error) {
+    var post models.Post
+    row := ur.db.QueryRowContext(ctx, "SELECT id, user_id, content, created_at FROM posts WHERE id = ?", postID)
+    err := row.Scan(&post.ID, &post.UserID, &post.Content, &post.CreatedAt)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            return models.Post{}, fmt.Errorf("post %d not found", postID)
+        }
+        return models.Post{}, fmt.Errorf("failed to fetch post %d: %v", postID, err)
+    }
+
+    // Fetch image URLs
+    imageRows, err := ur.db.QueryContext(ctx, "SELECT image_url FROM post_images WHERE post_id = ?", postID)
+    if err != nil {
+        return models.Post{}, fmt.Errorf("failed to fetch images for post %d: %v", postID, err)
+    }
+    defer imageRows.Close()
+
+    var imageURLs []string
+    for imageRows.Next() {
+        var url string
+        if err := imageRows.Scan(&url); err != nil {
+            return models.Post{}, fmt.Errorf("failed to scan image URL: %v", err)
+        }
+        imageURLs = append(imageURLs, url)
+    }
+    if err = imageRows.Err(); err != nil {
+        return models.Post{}, err
+    }
+    post.ImageURLs = imageURLs
+
+    return post, nil
+}
+
+// CreateComment adds a new comment to a post
+func (ur *UserRepository) CreateComment(ctx context.Context, postID, userID int, content string) (models.Comment, error) {
+    query := "INSERT INTO comments (post_id, user_id, content, created_at) VALUES (?, ?, ?, NOW())"
+    result, err := ur.db.ExecContext(ctx, query, postID, userID, content)
+    if err != nil {
+        return models.Comment{}, fmt.Errorf("failed to create comment: %v", err)
+    }
+
+    commentID, err := result.LastInsertId()
+    if err != nil {
+        return models.Comment{}, err
+    }
+
+    var createdAt time.Time
+    err = ur.db.QueryRowContext(ctx, "SELECT created_at FROM comments WHERE id = ?", commentID).Scan(&createdAt)
+    if err != nil {
+        return models.Comment{}, err
+    }
+
+    comment := models.Comment{
+        ID:        int(commentID),
+        PostID:    postID,
+        UserID:    userID,
+        Content:   content,
+        CreatedAt: createdAt,
+    }
+    return comment, nil
+}
+
+// GetCommentsByPostID fetches all comments for a post
+func (ur *UserRepository) GetCommentsByPostID(ctx context.Context, postID int) ([]models.Comment, error) {
+    rows, err := ur.db.QueryContext(ctx, "SELECT id, post_id, user_id, content, created_at FROM comments WHERE post_id = ? ORDER BY created_at ASC", postID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to fetch comments: %v", err)
+    }
+    defer rows.Close()
+
+    var comments []models.Comment
+    for rows.Next() {
+        var comment models.Comment
+        if err := rows.Scan(&comment.ID, &comment.PostID, &comment.UserID, &comment.Content, &comment.CreatedAt); err != nil {
+            return nil, fmt.Errorf("failed to scan comment: %v", err)
+        }
+        comments = append(comments, comment)
+    }
+    if err = rows.Err(); err != nil {
+        return nil, err
+    }
+    return comments, nil
 }
 
 
@@ -695,22 +1385,22 @@ func (ur *UserRepository) MarkListingAsSold(ctx context.Context, listingID int, 
 
 // // GetUserLibrary retrieves a user's library based on their user ID
 // func (ur *UserRepository) GetUserLibrary(ctx context.Context, userID int) ([]models.UserLibrary, error) {
-// 	query := `
-// 	SELECT id, user_id, book_id, status, personal_notes, favorite_quotes, created_at, updated_at
-// 	FROM user_libraries WHERE user_id = ?
-// 	`
-
-// 	rows, err := ur.db.QueryContext(ctx, query, userID)
-// 	if err != nil {
+	// 	query := `
+	// 	SELECT id, user_id, book_id, status, personal_notes, favorite_quotes, created_at, updated_at
+	// 	FROM user_libraries WHERE user_id = ?
+	// 	`
+	
+	// 	rows, err := ur.db.QueryContext(ctx, query, userID)
+	// 	if err != nil {
 // 		return nil, fmt.Errorf("failed to query user library: %w", err)
 // 	}
 // 	defer rows.Close()
 
 // 	var library []models.UserLibrary
 // 	for rows.Next() {
-// 		var entry models.UserLibrary
-// 		if err := rows.Scan(&entry.ID, &entry.UserID, &entry.BookID, &entry.Status, &entry.PersonalNotes, &entry.FavoriteQuotes, &entry.CreatedAt, &entry.UpdatedAt); err != nil {
-// 			return nil, fmt.Errorf("failed to scan user library row: %w", err)
+	// 		var entry models.UserLibrary
+	// 		if err := rows.Scan(&entry.ID, &entry.UserID, &entry.BookID, &entry.Status, &entry.PersonalNotes, &entry.FavoriteQuotes, &entry.CreatedAt, &entry.UpdatedAt); err != nil {
+		// 			return nil, fmt.Errorf("failed to scan user library row: %w", err)
 // 		}
 // 		library = append(library, entry)
 // 	}
@@ -724,7 +1414,7 @@ func (ur *UserRepository) MarkListingAsSold(ctx context.Context, listingID int, 
 
 // // UpdateUserLibrary updates an existing user library entry
 // func (ur *UserRepository) UpdateUserLibrary(ctx context.Context, entry models.UserLibrary) error {
-// 	query := `
+	// 	query := `
 // 	UPDATE user_libraries
 // 	SET status = ?, personal_notes = ?, favorite_quotes = ?, updated_at = CURRENT_TIMESTAMP
 // 	WHERE id = ? AND user_id = ?
@@ -732,15 +1422,15 @@ func (ur *UserRepository) MarkListingAsSold(ctx context.Context, listingID int, 
 
 // 	_, err := ur.db.ExecContext(ctx, query, entry.Status, entry.PersonalNotes, entry.FavoriteQuotes, entry.ID, entry.UserID)
 // 	if err != nil {
-// 		return fmt.Errorf("failed to update user library entry: %w", err)
-// 	}
+	// 		return fmt.Errorf("failed to update user library entry: %w", err)
+	// 	}
 
-// 	return nil
-// }
+	// 	return nil
+	// }
 
 // // DeleteUserLibraryEntry removes an entry from the user_libraries table
 // func (ur *UserRepository) DeleteUserLibraryEntry(ctx context.Context, id int, userID int) error {
-// 	query := `DELETE FROM user_libraries WHERE id = ? AND user_id = ?`
+	// 	query := `DELETE FROM user_libraries WHERE id = ? AND user_id = ?`
 // 	_, err := ur.db.ExecContext(ctx, query, id, userID)
 // 	if err != nil {
 // 		return fmt.Errorf("failed to delete user library entry: %w", err)
@@ -751,3 +1441,20 @@ func (ur *UserRepository) MarkListingAsSold(ctx context.Context, listingID int, 
 
 
 
+
+// GetMe fetches the current user
+// func (us *UserService) GetMe(ctx context.Context, userID int) (*models.User, error) {
+// 	query := `SELECT id, email, provider, hashed_password, picture_profile, picture_background, 
+// 	             first_name, last_name, phone_number, omise_account_id, quote, bio, gender, role, 
+// 	             created_at, updated_at 
+// 	          FROM users WHERE id = ?`
+// 	row := us.DB.QueryRowContext(ctx, query, userID)
+// 	u := &models.User{}
+// 	err := row.Scan(&u.ID, &u.Email, &u.Provider, &u.HashedPassword, &u.ProfilePicture, &u.BackgroundPicture,
+// 		&u.FirstName, &u.LastName, &u.PhoneNumber, &u.OmiseAccountID, &u.Quote, &u.Bio, &u.Gender, &u.Role,
+// 		&u.CreatedAt, &u.UpdatedAt)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return u, nil
+// }

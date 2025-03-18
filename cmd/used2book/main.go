@@ -1,6 +1,8 @@
 package main
 
 import (
+	// "os"
+	"context"
 	"github.com/joho/godotenv"
 	"log"
 	"net/http"
@@ -19,6 +21,15 @@ func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found")
 	}
+	// log.Println("ENV - main" ,os.Getenv("ENV"))
+
+	// if os.Getenv("ENV") != "production" {
+    //     if err := godotenv.Load(); err != nil {
+    //         log.Println("Warning: .env file not found, using system environment variables - main")
+    //     }
+    // }
+
+	
 
 	
 
@@ -40,6 +51,8 @@ func main() {
     
 	router := api.SetupRouter(db)
 
+
+
 	utils.RunMigrations()
 
     // Initialize Book Repository & Service
@@ -48,6 +61,16 @@ func main() {
 
     // ✅ Call SyncBooksIfNeeded() instead of inline logic
     bookService.SyncBooksIfNeeded()
+
+	
+	userRepo := mysql.NewUserRepository(db)
+
+	// Set up context for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start background cleanup as a goroutine
+	go userRepo.CleanupExpiredListings(ctx)
 
 
 

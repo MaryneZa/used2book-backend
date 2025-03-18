@@ -56,6 +56,11 @@ func BookRoutes(db *sql.DB) http.Handler {
 	
 	r.With(middleware.AuthMiddleware).Get("/all-genres", bookHandler.GetAllGenres)
 
+	r.Get("/all-book-genres", bookHandler.GetAllBookGenres)
+
+	r.With(middleware.AuthMiddleware).Get("/recommended-books", bookHandler.GetRecommendedBooks)
+
+
 
 	return r
 }

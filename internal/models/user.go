@@ -18,6 +18,7 @@ type User struct {
 	OmiseAccountID  sql.NullString `json:"omise_account_id" db:"omise_account_id"` // ✅ Added Omise account ID
 	Quote           string         `json:"quote" db:"quote"`
 	Bio             string         `json:"bio" db:"bio"`
+	Gender 		string `json:"gender" db:"gender"`
 	Role            string         `json:"role,omitempty" db:"role"`
 	CreatedAt       time.Time      `json:"created_at" db:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at" db:"updated_at"`
@@ -102,6 +103,13 @@ type UserLibrary struct {
 }
 
 
+type UserReview struct {
+	ID        int    `json:"id" db:"id"` // ✅ Primary key (necessary)
+	UserID    int    `json:"user_id" db:"user_id"` // ✅ Necessary (foreign key)
+	BookID    int    `json:"book_id" db:"book_id"` // ✅ Necessary (foreign key)
+	Rating    float32    `json:"rating" db:"rating"`
+}
+
 
 // UserListing represents a book listing for sale.
 type UserListing struct {
@@ -137,6 +145,23 @@ type ListingDetails struct {
     NumRatings    string    `json:"num_ratings,omitempty"`
 }
 
+
+type CartItem struct {
+    ID           int     `json:"id"`
+    UserID       int     `json:"user_id"`
+    ListingID    int     `json:"listing_id"`
+    BookID       int     `json:"book_id"`
+    Price        float32 `json:"price"`
+    AllowOffers  bool    `json:"allow_offers"`
+    BookTitle    string  `json:"title"`
+    BookAuthor   string  `json:"author"`
+    CoverImageURL string `json:"cover_image_url"`
+	SellerID      int `json:"seller_id"`
+}
+type UserPreferred struct {
+    UserID       int     `json:"user_id"`
+    GenreID 	 int     `json:"genre_id"`
+}
 
 // type GoogleUser struct {
 //     ID            string `json:"id"`

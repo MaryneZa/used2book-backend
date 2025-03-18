@@ -56,7 +56,7 @@ func RunMigrations() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         );`,
-        
+
 		// Create book_ratings table (stores calculated ratings)
 		`CREATE TABLE IF NOT EXISTS book_ratings (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -78,22 +78,23 @@ func RunMigrations() {
             favorite_quotes VARCHAR(255) DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (book_id) REFERENCES books(id)
         );`,
 
-		// Listings table
 		`CREATE TABLE IF NOT EXISTS listings (
             id INT AUTO_INCREMENT PRIMARY KEY,
             seller_id INT NOT NULL,
             book_id INT NOT NULL,
-            price DECIMAL(10,2) NOT NULL,
-            status ENUM('for_sale','sold','removed') DEFAULT 'for_sale',
+            price FLOAT NOT NULL,
+            status ENUM('for_sale', 'reserved_sale', 'sold', 'removed') DEFAULT 'for_sale',
+            reserved_expires_at TIMESTAMP NULL DEFAULT NULL,
             allow_offers BOOLEAN DEFAULT FALSE,
+            seller_omise_id VARCHAR(255) DEFAULT NULL,
             seller_note TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (seller_id) REFERENCES users(id),
+            FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (book_id) REFERENCES books(id)
         );`,
 
@@ -102,7 +103,7 @@ func RunMigrations() {
             user_id INT NOT NULL,
             listing_id INT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (listing_id) REFERENCES listings(id)
         );`,
 
@@ -116,7 +117,7 @@ func RunMigrations() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (listing_id) REFERENCES listings(id),
-            FOREIGN KEY (buyer_id) REFERENCES users(id)
+            FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE
         );`,
 
 		// Transactions table
@@ -126,11 +127,11 @@ func RunMigrations() {
             seller_id INT NOT NULL,
             listing_id INT NOT NULL,
             transaction_amount DECIMAL(10,2) NOT NULL,
-            payment_status ENUM('pending','completed','failed') DEFAULT 'pending',
+            payment_status ENUM('reserved','completed','failed') DEFAULT 'reserved',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (buyer_id) REFERENCES users(id),
-            FOREIGN KEY (seller_id) REFERENCES users(id),
+            FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (listing_id) REFERENCES listings(id)
         );`,
 
@@ -143,32 +144,25 @@ func RunMigrations() {
             comment TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (book_id) REFERENCES books(id)
         );`,
-
-		// // Seller Reviews table
-		// `CREATE TABLE IF NOT EXISTS seller_reviews (
-		//     id INT AUTO_INCREMENT PRIMARY KEY,
-		//     buyer_id INT NOT NULL,
-		//     seller_id INT NOT NULL,
-		//     rating INT NOT NULL,
-		//     comment TEXT,
-		//     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		//     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-		//     FOREIGN KEY (buyer_id) REFERENCES users(id),
-		//     FOREIGN KEY (seller_id) REFERENCES users(id)
-		// );`,
 
 		// Posts table
 		`CREATE TABLE IF NOT EXISTS posts (
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,
-            title VARCHAR(255) NOT NULL,
             content TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );`,
+
+		`CREATE TABLE IF NOT EXISTS post_images (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            post_id INT NOT NULL,
+            image_url VARCHAR(255) NOT NULL,
+            FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
         );`,
 
 		// Comments table
@@ -180,18 +174,18 @@ func RunMigrations() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (post_id) REFERENCES posts(id),
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        );`,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );`,
 
 		// Notifications table
 		`CREATE TABLE IF NOT EXISTS notifications (
-            id INT AUTO_INCREMENT PRIMARY KEY,
+                id INT AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,
             message VARCHAR(255),
             is_read BOOLEAN DEFAULT false,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        );`,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            );`,
 
 		// Recommendations table
 		`CREATE TABLE IF NOT EXISTS recommendations (
@@ -200,9 +194,9 @@ func RunMigrations() {
             book_id INT NOT NULL,
             score DECIMAL(5,2) NOT NULL,
             generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (book_id) REFERENCES books(id)
-        );`,
+            );`,
 
 		// genres table
 		`CREATE TABLE IF NOT EXISTS genres (
@@ -210,12 +204,12 @@ func RunMigrations() {
             name VARCHAR(255) NOT NULL UNIQUE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        );`,
+            );`,
 
 		// Book genres table (Pivot)
 		`CREATE TABLE IF NOT EXISTS book_genres (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            book_id INT NOT NULL,
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                book_id INT NOT NULL,
             genre_id INT NOT NULL,
             FOREIGN KEY (book_id) REFERENCES books(id),
             FOREIGN KEY (genre_id) REFERENCES genres(id)
@@ -228,7 +222,7 @@ func RunMigrations() {
             genre_id INT NOT NULL,
             FOREIGN KEY (post_id) REFERENCES posts(id),
             FOREIGN KEY (genre_id) REFERENCES genres(id)
-        );`,
+            );`,
 
 		`CREATE TABLE IF NOT EXISTS refresh_tokens (
 			id INT AUTO_INCREMENT PRIMARY KEY,
@@ -237,7 +231,7 @@ func RunMigrations() {
 			device_info VARCHAR(255),  -- Optional: Device/browser details
 			expires_at DATETIME NOT NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			FOREIGN KEY (user_id) REFERENCES users(id)
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 		);`,
 
 		`CREATE TABLE IF NOT EXISTS user_preferred_genres (
@@ -246,9 +240,21 @@ func RunMigrations() {
             genre_id INT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (genre_id) REFERENCES genres(id)
         );`,
+		// // Seller Reviews table
+		// `CREATE TABLE IF NOT EXISTS seller_reviews (
+		//     id INT AUTO_INCREMENT PRIMARY KEY,
+		//     buyer_id INT NOT NULL,
+		//     seller_id INT NOT NULL,
+		//     rating INT NOT NULL,
+		//     comment TEXT,
+		//     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		//     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+		//     FOREIGN KEY (buyer_id) REFERENCES users(id),
+		//     FOREIGN KEY (seller_id) REFERENCES users(id)
+		// );`,
 	}
 
 	for _, query := range queries {

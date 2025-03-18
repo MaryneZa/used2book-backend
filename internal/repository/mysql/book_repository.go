@@ -60,12 +60,14 @@ func (br *BookRepository) InsertBook(ctx context.Context, book models.Book) (int
 	return finalBookID, nil
 }
 
-// GetAllBooks retrieves all books from the database
 func (br *BookRepository) GetAllBooks(ctx context.Context) ([]models.Book, error) {
 	query := `
-    SELECT id, title, author, description, language, isbn, 
-           publisher, publish_date, cover_image_url 
-    FROM books
+    SELECT b.id, b.title, b.author, b.description, b.language, b.isbn, 
+           b.publisher, b.publish_date, b.cover_image_url,
+           COALESCE(br.average_rating, 0) AS average_rating, 
+           COALESCE(br.num_ratings, 0) AS num_ratings
+    FROM books b
+    LEFT JOIN book_ratings br ON b.id = br.book_id
     `
 
 	// Execute the query
@@ -85,6 +87,7 @@ func (br *BookRepository) GetAllBooks(ctx context.Context) ([]models.Book, error
 			&book.ID, &book.Title, &book.Author, &book.Description,
 			&book.Language, &book.ISBN, &book.Publisher,
 			&book.PublishDate, &book.CoverImageURL,
+			&book.AverageRating, &book.NumRatings, // Add these fields
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning book: %w", err)
@@ -99,7 +102,6 @@ func (br *BookRepository) GetAllBooks(ctx context.Context) ([]models.Book, error
 
 	return books, nil
 }
-
 
 // GetBookByID retrieves a book by its ID, including its rating information
 func (br *BookRepository) GetBookByID(ctx context.Context, bookID int) (*models.Book, error) {
@@ -265,6 +267,33 @@ func (br *BookRepository) GetReviewsByBookID(ctx context.Context, bookID int) ([
 	return reviews, nil
 }
 
+func (br *BookRepository) GetAllBookGenres(ctx context.Context) ([]models.BookGenre, error) {
+	query := `SELECT book_id, genre_id FROM book_genres`
+
+	rows, err := br.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var bookgenres []models.BookGenre
+	for rows.Next() {
+		var book_genre models.BookGenre
+		err := rows.Scan(&book_genre.BookID, &book_genre.GenreID)
+		if err != nil {
+			return nil, err
+		}
+		bookgenres = append(bookgenres, book_genre)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return bookgenres, nil
+}
+
+
 
 // Helper functions for parsing values
 func parseInt(value string) int {
@@ -324,7 +353,7 @@ func (br *BookRepository) SyncBooksFromGoogleSheets(sheetID, apiKey string) erro
 	}
 
 	ctx := context.Background()
-	for i, row := range records[1:30] { // Skip header row
+	for i, row := range records[1:150] { // Skip header row
 		if len(row) < 18 {
 			log.Printf("⚠️ Skipping row %d: insufficient data\n", i+1)
 			continue
@@ -479,26 +508,36 @@ func (br *BookRepository) AddBookReview(ctx context.Context, userID int, bookID 
 }
 
 func (br *BookRepository) GetAllGenres(ctx context.Context) ([]models.Genre, error) {
-	query := `SELECT id, name FROM genres ORDER BY name ASC`
+    // Verify connection
+    var test int
+    if err := br.db.QueryRowContext(ctx, "SELECT 1").Scan(&test); err != nil {
+        log.Printf("Database connection error: %v", err)
+        return nil, err
+    }
 
-	rows, err := br.db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+    query := `SELECT id, name FROM genres ORDER BY name ASC`
+    rows, err := br.db.QueryContext(ctx, query)
+    if err != nil {
+        log.Printf("Query error: %v", err)
+        return nil, err
+    }
+    defer rows.Close()
 
-	var genres []models.Genre
-	for rows.Next() {
-		var genre models.Genre
-		if err := rows.Scan(&genre.ID, &genre.Name); err != nil {
-			return nil, err
-		}
-		genres = append(genres, genre)
-	}
+    var genres []models.Genre
+    for rows.Next() {
+        var genre models.Genre
+        if err := rows.Scan(&genre.ID, &genre.Name); err != nil {
+            log.Printf("Scan error: %v", err)
+            return nil, err
+        }
+        genres = append(genres, genre)
+    }
 
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
+    if err := rows.Err(); err != nil {
+        log.Printf("Rows error: %v", err)
+        return nil, err
+    }
 
-	return genres, nil
+    log.Printf("Found %d genres", len(genres))
+    return genres, nil
 }

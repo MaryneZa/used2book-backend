@@ -32,6 +32,10 @@ func (us *UserService) SetUserPreferredGenres(ctx context.Context, userID int, g
 	return us.userRepo.AddUserPreferredGenres(ctx, userID, genreIDs)
 }
 
+func (us *UserService) GetUserPreferences(ctx context.Context, userID int) ([]models.Genre, error) {
+	return us.userRepo.GetUserPreferredGenres(ctx, userID)
+}
+
 
 func (us *UserService) GetMe(ctx context.Context, userID int) (*models.GetMe, error) {
 
@@ -110,8 +114,89 @@ func (us *UserService) GetListingByID(ctx context.Context, listingID int) (*mode
     return us.userRepo.GetListingByID(ctx, listingID)
 }
 
-func (us *UserService) MarkListingAsSold(ctx context.Context, listingID int, buyerID int, transactionAmount float32) error {
-	return us.userRepo.MarkListingAsSold(ctx, listingID, buyerID, transactionAmount)
+func (us *UserService) MarkListingAsSold(ctx context.Context, listingID int, buyerID int, amount float64) error {
+	return us.userRepo.MarkListingAsSold(ctx, listingID, buyerID, amount)
 }
+
+func (us *UserService) UpdateGender(ctx context.Context, userID int, gender string) error {
+    return us.userRepo.UpdateGender(ctx, userID, gender)
+}
+
+func (us *UserService) GetGender(ctx context.Context, userID int) (string, error) {
+    return us.userRepo.GetGender(ctx, userID)
+}
+
+func (us *UserService) AddToCart(ctx context.Context, userID int, listingID int) (int, error) {
+	return us.userRepo.AddToCart(ctx, userID, listingID)
+}
+
+func (us *UserService) RemoveFromCart(ctx context.Context, userID int, listingID int) error {
+	return us.userRepo.RemoveFromCart(ctx,userID,listingID)
+
+}
+func (us *UserService) GetCart(ctx context.Context, userID int) ([]models.CartItem, error) {
+	return us.userRepo.GetCart(ctx, userID)
+}
+
+func (us *UserService) ReserveListing(ctx context.Context, listingID int, timeoutMinutes int) (bool, error) {
+	return us.userRepo.ReserveListing(ctx, listingID, timeoutMinutes)
+}
+
+func (us *UserService) ExpireReservedListing(ctx context.Context, listingID int) error {
+	return us.userRepo.ExpireReservedListing(ctx, listingID)
+}
+
+func (us *UserService) CreateTransaction(ctx context.Context, buyerID, sellerID, listingID int, amount float64, status string) error {
+	return us.userRepo.CreateTransaction(ctx, buyerID, sellerID, listingID, amount, status)
+}
+
+func (us *UserService) UpdateTransactionStatus(ctx context.Context, listingID int, status string) error {
+	return us.userRepo.UpdateTransactionStatus(ctx, listingID, status)
+}
+
+func (us *UserService) IsListingReserved(ctx context.Context, listingID int) (bool, bool, error) {
+	return us.userRepo.IsListingReserved(ctx, listingID)
+}
+
+func (us *UserService) GetAllUserReview(ctx context.Context) ([]models.UserReview, error) {
+	return us.userRepo.GetAllUserReview(ctx)
+}
+
+func (us *UserService) GetAllUserPreferred(ctx context.Context) ([]models.UserPreferred, error) {
+	return us.userRepo.GetAllUserPreferred(ctx)
+}
+
+func (us *UserService) CreatePost(ctx context.Context, userID int, content string, imageURLs []string) (models.Post, error) {
+	return us.userRepo.CreatePost(ctx, userID, content, imageURLs)
+}
+
+// GetAllPosts retrieves all posts
+func (us *UserService) GetAllPosts(ctx context.Context) ([]models.Post, error) {
+    return us.userRepo.GetAllPosts(ctx)
+}
+
+// GetPostsByUserID retrieves posts by user ID
+func (us *UserService) GetPostsByUserID(ctx context.Context, userID int) ([]models.Post, error) {
+    return us.userRepo.GetPostsByUserID(ctx, userID)
+}
+
+// GetPostByPostID retrieves a post by its ID
+func (us *UserService) GetPostByPostID(ctx context.Context, postID int) (models.Post, error) {
+    return us.userRepo.GetPostByPostID(ctx, postID)
+}
+
+// CreateComment creates a new comment
+func (us *UserService) CreateComment(ctx context.Context, postID, userID int, content string) (models.Comment, error) {
+    return us.userRepo.CreateComment(ctx, postID, userID, content)
+}
+
+// GetCommentsByPostID retrieves comments for a post
+func (us *UserService) GetCommentsByPostID(ctx context.Context, postID int) ([]models.Comment, error) {
+    return us.userRepo.GetCommentsByPostID(ctx, postID)
+}
+
+
+
+
 
 

@@ -9,6 +9,7 @@ import (
 	"os"
 	"github.com/imagekit-developer/imagekit-go"
 	"github.com/imagekit-developer/imagekit-go/api/uploader"
+	// "log"
 
 )
 
@@ -19,6 +20,13 @@ func UploadToImageKit(file io.Reader, fileName string) (string, error) {
 	if err := godotenv.Load(); err != nil {
         return "", fmt.Errorf("failed to load .env file")
     }
+	// log.Println("ENV - imgkit" ,os.Getenv("ENV"))
+
+	// if os.Getenv("ENV") != "production" {
+    //     if err := godotenv.Load(); err != nil {
+    //         log.Println("Warning: .env file not found, using system environment variables - imgkit")
+    //     }
+    // }
     
 
 	ik := imagekit.NewFromParams(imagekit.NewParams{

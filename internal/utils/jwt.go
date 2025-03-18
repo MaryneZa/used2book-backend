@@ -6,6 +6,7 @@ import (
     "github.com/joho/godotenv"
     "os"
     "time"
+    // "log"
 )
 
 // Load the secret key from .env
@@ -13,6 +14,14 @@ func getAccessTokenSecretKey() (string, error) {
     if err := godotenv.Load(); err != nil {
         return "", errors.New("failed to load .env file")
     }
+
+    // log.Println("ENV - acctoken" ,os.Getenv("ENV"))
+
+	// if os.Getenv("ENV") != "production" {
+    //     if err := godotenv.Load(); err != nil {
+    //         log.Println("Warning: .env file not found, using system environment variables - acctoken")
+    //     }
+    // }
     secret := os.Getenv("JWT_ACCESS_TOKEN_SECRET")
     
     if secret == "" {
@@ -25,6 +34,14 @@ func getRefreshTokenSecretKey() (string, error) {
     if err := godotenv.Load(); err != nil {
         return "", errors.New("failed to load .env file")
     }
+
+    // log.Println("ENV - retoken" ,os.Getenv("ENV"))
+
+	// if os.Getenv("ENV") != "production" {
+    //     if err := godotenv.Load(); err != nil {
+    //         log.Println("Warning: .env file not found, using system environment variables - retoken")
+    //     }
+    // }
     secret := os.Getenv("JWT_REFRESH_TOKEN_SECRET")
     if secret == "" {
         return "", errors.New("JWT_SECRET is not set in .env file")

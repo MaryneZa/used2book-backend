@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/omise/omise-go"
 	"github.com/omise/omise-go/operations"
@@ -14,7 +15,7 @@ type OmiseService struct {
 	Client *omise.Client
 }
 
-// NewOmiseService initializes Omise with your API keys
+// NewOmiseService initializes Omise with API keys
 func NewOmiseService() *OmiseService {
 	client, err := omise.NewClient(os.Getenv("OMISE_PUBLIC_KEY"), os.Getenv("OMISE_SECRET_KEY"))
 	if err != nil {
@@ -23,49 +24,87 @@ func NewOmiseService() *OmiseService {
 	return &OmiseService{Client: client}
 }
 
-// CreateCharge processes a payment from a buyer
-func (o *OmiseService) CreateCharge(amount int64, token string, sellerRecipientID string) (*omise.Charge, error) {
-	charge := &omise.Charge{}
+// CreatePromptPayCharge creates a PromptPay charge with a custom expiration
+func (o *OmiseService) CreatePromptPayCharge(amount int64, listingID int, sellerRecipientID string, buyerID int, expiresInMinutes int) (*omise.Charge, error) {
+	// Step 1: Create a PromptPay source
+	source := &omise.Source{}
+	createSource := &operations.CreateSource{
+		Type:     "promptpay",
+		Amount:   amount,
+		Currency: "THB",
+	}
+	err := o.Client.Do(source, createSource)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create PromptPay source: %v", err)
+	}
 
-	// Create a charge using the buyer's card token
+	// Step 2: Create the charge using the source ID
+	charge := &omise.Charge{}
+	expiresAt := time.Now().Add(time.Duration(expiresInMinutes) * time.Minute) // Keep as time.Time
 	createCharge := &operations.CreateCharge{
-		Amount:      amount, // Amount in satangs (e.g., 1000 satangs = 10 THB)
+		Amount:      amount,
 		Currency:    "THB",
-		Card:        token, // Token from frontend (e.g., "tok_xxxx")
-		Description: "Book purchase",
+		Source:      source.ID, // Use the source ID (string)
+		Description: fmt.Sprintf("Book purchase for listing %d", listingID),
+		ExpiresAt:   &expiresAt, // Pass pointer to time.Time
 		Metadata: map[string]interface{}{
-			"seller_id": sellerRecipientID, // Store seller's Omise Recipient ID for tracking
+			"seller_id":  sellerRecipientID,
+			"listing_id": listingID,
+			"buyer_id":   buyerID,
 		},
 	}
-
-	// Corrected call to Client.Do (no context)
-	err := o.Client.Do(charge, createCharge)
+	err = o.Client.Do(charge, createCharge)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create charge: %v", err)
+		return nil, fmt.Errorf("failed to create PromptPay charge: %v", err)
 	}
-
 	return charge, nil
 }
 
+// GetRecipient fetches a recipient's details from Omise
+func (o *OmiseService) GetRecipient(recipientID string) (*omise.Recipient, error) {
+	recipient := &omise.Recipient{}
+	err := o.Client.Do(recipient, &operations.RetrieveRecipient{RecipientID: recipientID})
+	if err != nil {
+		return nil, err
+	}
+	return recipient, nil
+}
+
+// CreateRecipient creates a new Omise recipient for the seller
 func (o *OmiseService) CreateRecipient(bankAccountNumber, bankAccountName, bankCode string) (string, error) {
 	recipient := &omise.Recipient{}
-
-	// Create a recipient for the seller
 	createRecipient := &operations.CreateRecipient{
 		Name: bankAccountName,
-		Type: "individual", // or "corporation" for businesses
+		Type: "individual",
 		BankAccount: &omise.BankAccount{
 			Number: bankAccountNumber,
 			Name:   bankAccountName,
-			Brand:  bankCode, // Example: "bbl" for Bangkok Bank, "scb" for Siam Commercial Bank
+			Brand:  bankCode,
 		},
 	}
-
-	// Execute the API call
 	err := o.Client.Do(recipient, createRecipient)
 	if err != nil {
 		return "", fmt.Errorf("failed to create recipient: %v", err)
 	}
+	return recipient.ID, nil
+}
 
+// UpdateRecipient updates an existing Omise recipient
+func (o *OmiseService) UpdateRecipient(recipientID, bankAccountNumber, bankAccountName, bankCode string) (string, error) {
+	recipient := &omise.Recipient{}
+	updateOp := &operations.UpdateRecipient{
+		RecipientID: recipientID,
+		Name:        bankAccountName,
+		Type:        "individual",
+		BankAccount: &omise.BankAccount{
+			Number: bankAccountNumber,
+			Name:   bankAccountName,
+			Brand:  bankCode,
+		},
+	}
+	err := o.Client.Do(recipient, updateOp)
+	if err != nil {
+		return "", fmt.Errorf("failed to update recipient: %v", err)
+	}
 	return recipient.ID, nil
 }

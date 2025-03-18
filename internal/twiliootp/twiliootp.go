@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
     "errors"
-
+	
 	"github.com/go-redis/redis/v8"
 	"github.com/twilio/twilio-go"
 	openapi "github.com/twilio/twilio-go/rest/api/v2010"
@@ -21,6 +21,13 @@ func getTwilioAccountSID() (string, error) {
     if err := godotenv.Load(); err != nil {
         return "", errors.New("failed to load .env file")
     }
+	// log.Println("ENV - twiloID" ,os.Getenv("ENV"))
+
+	// if os.Getenv("ENV") != "production" {
+    //     if err := godotenv.Load(); err != nil {
+    //         log.Println("Warning: .env file not found, using system environment variables - twilioID")
+    //     }
+    // }
     secret := os.Getenv("TWILIO_ACCOUNT_SID")
     
     if secret == "" {
@@ -33,6 +40,13 @@ func getTwilioAuthToken() (string, error) {
     if err := godotenv.Load(); err != nil {
         return "", errors.New("failed to load .env file")
     }
+	// log.Println("ENV - twilio token" ,os.Getenv("ENV"))
+
+	// if os.Getenv("ENV") != "production" {
+    //     if err := godotenv.Load(); err != nil {
+    //         log.Println("Warning: .env file not found, using system environment variables - twiliotoken")
+    //     }
+    // }
     secret := os.Getenv("TWILIO_AUTH_TOKEN")
     
     if secret == "" {
@@ -45,6 +59,13 @@ func getTwilioPhoneNumber() (string, error) {
     if err := godotenv.Load(); err != nil {
         return "", errors.New("failed to load .env file")
     }
+	// log.Println("ENV - twilio phone" ,os.Getenv("ENV"))
+
+	// if os.Getenv("ENV") != "production" {
+    //     if err := godotenv.Load(); err != nil {
+    //         log.Println("Warning: .env file not found, using system environment variables - twilio phone")
+    //     }
+    // }
     secret := os.Getenv("TWILIO_PHONE_NUMBER")
     
     if secret == "" {

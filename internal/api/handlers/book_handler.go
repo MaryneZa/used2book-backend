@@ -41,6 +41,7 @@ func (bh *BookHandler) GetAllGenres(w http.ResponseWriter, r *http.Request) {
 
 	// Call the BookService method to get the total book count
 	genres, err := bh.BookService.GetAllGenres(r.Context())
+	log.Println(genres)
 	if err != nil {
 		// Handle the error, e.g., return a 500 Internal Server Error
 		http.Error(w, "Failed to get all genres", http.StatusInternalServerError)
@@ -49,6 +50,69 @@ func (bh *BookHandler) GetAllGenres(w http.ResponseWriter, r *http.Request) {
 
 	sendSuccessResponse(w, map[string]interface{}{
 		"genres": genres,
+	})
+	
+}
+
+func (bh *BookHandler) GetRecommendedBooks(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(int)
+	if !ok {
+		sendErrorResponse(w, http.StatusUnauthorized, "Unauthorized")
+		return
+	}
+
+	// Fetch recommendations from the Flask API
+	resp, err := http.Get("http://localhost:5000/recommendations?user_id=" + strconv.Itoa(userID))
+	if err != nil {
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch recommendations: "+err.Error())
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		sendErrorResponse(w, http.StatusInternalServerError, "Recommendation API returned: "+resp.Status)
+		return
+	}
+
+	// Decode the recommendation response
+	var recs struct {
+		Recommendations []models.Recommendation `json:"recommendations"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&recs); err != nil {
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to parse recommendations: "+err.Error())
+		return
+	}
+
+	// Fetch book details for each recommended ID
+	var books []models.Book
+	for _, rec := range recs.Recommendations {
+		book, err := bh.BookService.GetBookByID(context.Background(), rec.ID)
+		if err != nil {
+			log.Printf("Failed to fetch book ID %d: %v", rec.ID, err)
+			continue // Skip failed books, or handle differently
+		}
+		books = append(books, *book)
+	}
+
+	// Send response
+	sendSuccessResponse(w, map[string]interface{}{
+		"books": books,
+	})
+}
+
+func (bh *BookHandler) GetAllBookGenres(w http.ResponseWriter, r *http.Request) {
+
+	// Call the BookService method to get the total book count
+	book_genres, err := bh.BookService.GetAllBookGenres(r.Context())
+	// log.Println(book_genres)
+	if err != nil {
+		// Handle the error, e.g., return a 500 Internal Server Error
+		http.Error(w, "Failed to get all genres", http.StatusInternalServerError)
+		return
+	}
+
+	sendSuccessResponse(w, map[string]interface{}{
+		"book_genres": book_genres,
 	})
 	
 }

@@ -31,6 +31,7 @@ func UserRoutes(db *sql.DB) http.Handler {
 	
 	r.With(middleware.AuthMiddleware).Post("/upload-profile-image", userHandler.UploadProfileImageHandler)
 	r.With(middleware.AuthMiddleware).Post("/upload-background-image", userHandler.UploadBackgroundImageHandler)
+
 	r.With(middleware.AuthMiddleware).Post("/edit-account-info", userHandler.EditAccountInfoHandler)
 	r.With(middleware.AuthMiddleware).Post("/edit-username", userHandler.EditUserNameHandler)
 	r.With(middleware.AuthMiddleware).Post("/edit-preferrence", userHandler.EditPreferrenceHandler)
@@ -46,7 +47,7 @@ func UserRoutes(db *sql.DB) http.Handler {
 	r.With(middleware.AuthMiddleware).Get("/get-wishlist/{userID:[0-9]+}", userHandler.GetUserWishlist)
 
 
-	r.With(middleware.AuthMiddleware).Get("/user-info/{userID:[0-9]+}", userHandler.GetUserByIDHandler)
+	r.Get("/user-info/{userID:[0-9]+}", userHandler.GetUserByIDHandler)
 	r.With(middleware.AuthMiddleware).Get("/user-wishlist/{userID:[0-9]+}", userHandler.GetUserWishlist)
 
 
@@ -63,9 +64,39 @@ func UserRoutes(db *sql.DB) http.Handler {
 
 	r.With(middleware.AuthMiddleware).Post("/listing/sold", userHandler.MarkListingAsSoldHandler)
 
-	r.With(middleware.AuthMiddleware).Post("/users/preferences", userHandler.SetUserPreferredGenresHandler)
+	r.With(middleware.AuthMiddleware).Post("/preferences", userHandler.SetUserPreferredGenresHandler)
+	r.With(middleware.AuthMiddleware).Get("/preferences", userHandler.GetUserPreferencesHandler)
+
+	r.Get("/user-preferences", userHandler.GetAllUserPreferred)
 
 
+	r.With(middleware.AuthMiddleware).Post("/gender", userHandler.UpdateGenderHandler)
+	r.With(middleware.AuthMiddleware).Get("/gender", userHandler.GetGenderHandler)
+
+	r.With(middleware.AuthMiddleware).Post("/cart", userHandler.AddToCartHandler)
+	r.With(middleware.AuthMiddleware).Get("/cart", userHandler.GetCartHandler)
+	r.With(middleware.AuthMiddleware).Post("/cart-rm", userHandler.RemoveFromCartHandler)
+
+	r.With(middleware.AuthMiddleware).Post("/post-create", userHandler.CreatePostHandler)
+	r.With(middleware.AuthMiddleware).Post("/upload-post-images", userHandler.UploadPostImagesHandler)
+
+	r.With(middleware.AuthMiddleware).Get("/posts", userHandler.GetAllPostsHandler)
+	r.With(middleware.AuthMiddleware).Get("/user-posts/{userID:[0-9]+}", userHandler.GetPostsByUserIDHandler)
+
+	r.With(middleware.AuthMiddleware).Post("/user/comment-create", userHandler.CreateCommentHandler)
+	r.With(middleware.AuthMiddleware).Get("/user/comments", userHandler.GetCommentsByPostIDHandler) // e.g., /user/comments?post_id=1
+
+	// r.Get("/post", uh.GetPostByPostIDHandler) // e.g., /post?post_id=1
+
+	r.Get("/user-review", userHandler.GetAllUserReview)
+
+
+
+
+
+
+	
+	
 	return r
 
 }

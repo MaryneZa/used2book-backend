@@ -1,6 +1,6 @@
 module used2book-backend
 
-go 1.23.3
+go 1.23
 
 require (
 	firebase.google.com/go v3.13.0+incompatible

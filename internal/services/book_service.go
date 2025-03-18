@@ -30,6 +30,10 @@ func (bs *BookService) GetBookByID(ctx context.Context, bookID int) (*models.Boo
 	return bs.bookRepo.GetBookByID(ctx, bookID)
 }
 
+func (bs *BookService) GetAllBookGenres(ctx context.Context) ([]models.BookGenre, error) {
+	return bs.bookRepo.GetAllBookGenres(ctx)
+}
+
 // // GetBookWithRatings retrieves a book with its ratings
 // func (bs *BookService) GetBookWithRatings(ctx context.Context, bookID int) (*models.BookWithRatings, error) {
 // 	return bs.bookRepo.GetBookWithRatings(ctx, bookID)
@@ -109,6 +113,14 @@ func getGoogleSheetID() (string, error) {
     if err := godotenv.Load(); err != nil {
         return "", errors.New("failed to load .env file")
     }
+
+	// log.Println("ENV - gg_id" ,os.Getenv("ENV"))
+
+	// if os.Getenv("ENV") != "production" {
+    //     if err := godotenv.Load(); err != nil {
+    //         log.Println("Warning: .env file not found, using system environment variables - gg_id")
+    //     }
+    // }
     secret := os.Getenv("GOOGLE_SHEET_ID")
     
     if secret == "" {
@@ -117,9 +129,18 @@ func getGoogleSheetID() (string, error) {
     return secret, nil
 }
 func getGoogleSheetAPIKey() (string, error) {
+
     if err := godotenv.Load(); err != nil {
         return "", errors.New("failed to load .env file")
     }
+
+	// log.Println("ENV - gg_key" ,os.Getenv("ENV"))
+
+	// if os.Getenv("ENV") != "production" {
+    //     if err := godotenv.Load(); err != nil {
+    //         log.Println("Warning: .env file not found, using system environment variables - key")
+    //     }
+    // }
     secret := os.Getenv("GOOGLE_SHEET_API_KEY")
     
     if secret == "" {
