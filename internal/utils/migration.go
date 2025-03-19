@@ -98,6 +98,14 @@ func RunMigrations() {
             FOREIGN KEY (book_id) REFERENCES books(id)
         );`,
 
+		`CREATE TABLE IF NOT EXISTS listing_images (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            listing_id INT NOT NULL,
+            image_url VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
+        );`,
+
 		`CREATE TABLE IF NOT EXISTS cart (
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,
@@ -177,6 +185,16 @@ func RunMigrations() {
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );`,
 
+		`CREATE TABLE IF NOT EXISTS post_likes (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                post_id INT NOT NULL,
+                user_id INT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE KEY unique_like (post_id, user_id) -- Ensures one like per user per post
+            );`,
+
 		// Notifications table
 		`CREATE TABLE IF NOT EXISTS notifications (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -185,17 +203,6 @@ func RunMigrations() {
             is_read BOOLEAN DEFAULT false,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            );`,
-
-		// Recommendations table
-		`CREATE TABLE IF NOT EXISTS recommendations (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            book_id INT NOT NULL,
-            score DECIMAL(5,2) NOT NULL,
-            generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (book_id) REFERENCES books(id)
             );`,
 
 		// genres table
@@ -255,6 +262,16 @@ func RunMigrations() {
 		//     FOREIGN KEY (buyer_id) REFERENCES users(id),
 		//     FOREIGN KEY (seller_id) REFERENCES users(id)
 		// );`,
+		// // Recommendations table
+		// `CREATE TABLE IF NOT EXISTS recommendations (
+		//     id INT AUTO_INCREMENT PRIMARY KEY,
+		//     user_id INT NOT NULL,
+		//     book_id INT NOT NULL,
+		//     score DECIMAL(5,2) NOT NULL,
+		//     generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		//     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+		//     FOREIGN KEY (book_id) REFERENCES books(id)
+		//     );`,
 	}
 
 	for _, query := range queries {

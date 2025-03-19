@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"errors"
 	"time"
+	"strings"
 )
 
 type UserRepository struct {
@@ -171,7 +172,7 @@ func (ur *UserRepository) Create(ctx context.Context, user *models.User) (int, e
 }
 
 
-func (ur *UserRepository) AddBookToLibrary(ctx context.Context, userID int, bookID int, ownStatus string, price float32, allowOffer bool) (bool, error) {
+func (ur *UserRepository) AddBookToLibrary(ctx context.Context, userID int, bookID int, ownStatus string, price float32, allowOffer bool, imageURLs []string, seller_note string) (bool, error) {
 	// ✅ If the request is to add to wishlist, check if it already exists
 	if ownStatus == "wishlist" {
 		var count int
@@ -204,14 +205,28 @@ func (ur *UserRepository) AddBookToLibrary(ctx context.Context, userID int, book
 
 	// ✅ If the book is marked as "owned", add it to listings
 	if ownStatus == "owned" {
-		query := `INSERT INTO listings (seller_id, book_id, price, allow_offers, created_at, updated_at) 
-		         VALUES (?, ?, ?, ?, NOW(), NOW()) 
+		query := `INSERT INTO listings (seller_id, book_id, price, allow_offers, seller_note, created_at, updated_at) 
+		         VALUES (?, ?, ?, ?, ?, NOW(), NOW()) 
 		         ON DUPLICATE KEY UPDATE price = VALUES(price), allow_offers = VALUES(allow_offers), status = 'for_sale', updated_at = NOW()`
 
-		_, err := ur.db.ExecContext(ctx, query, userID, bookID, price, allowOffer)
+		result, err := ur.db.ExecContext(ctx, query, userID, bookID, price, allowOffer, seller_note)
 		if err != nil {
 			return false, err
 		}
+		listingID, err := result.LastInsertId()
+        if err != nil {
+            return false, err
+        }
+
+        // Add images to listing_images
+        for _, url := range imageURLs {
+            _, err = ur.db.ExecContext(ctx, 
+                "INSERT INTO listing_images (listing_id, image_url, created_at) VALUES (?, ?, NOW())",
+                listingID, url)
+            if err != nil {
+                return false, fmt.Errorf("failed to add image: %v", err)
+            }
+        }
 	}
 
 	log.Println("✅ Book added to library for user:", userID, "BookID:", bookID, "Status:", ownStatus)
@@ -529,12 +544,12 @@ func (ur *UserRepository) GetUserLibrary(ctx context.Context, userID int) ([]mod
 }
 
 
-func (ur *UserRepository) GetAllListings(ctx context.Context, userID int) ([]models.UserListing, error) {
+func (ur *UserRepository) GetAllListings(ctx context.Context) ([]models.UserListing, error) {
 	query := `SELECT id, seller_id, book_id, price, status, allow_offers, created_at, updated_at 
 	          FROM listings 
-	          WHERE seller_id != ? AND status = 'for_sale'`
+	          WHERE status = 'for_sale'`
 
-	rows, err := ur.db.QueryContext(ctx, query, userID)
+	rows, err := ur.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -549,7 +564,6 @@ func (ur *UserRepository) GetAllListings(ctx context.Context, userID int) ([]mod
 		listings = append(listings, listing)
 	}
 
-	log.Println("Fetched listings for marketplace (excluding user:", userID, ")")
 	return listings, nil
 }
 
@@ -651,62 +665,62 @@ func (ur *UserRepository) GetWishlistByUserID(ctx context.Context, userID int) (
 }
 
 
-func (ur *UserRepository) GetListingWithBookByID(ctx context.Context, listingID int) (*models.ListingDetails, error) {
-    query := `
-        SELECT 
-            l.id AS listing_id,
-            l.seller_id,
-            l.book_id,
-            l.price,
-            l.status,
-            l.allow_offers,
-            b.title,
-            b.author,
-            b.description,
-            b.language,
-            b.isbn,
-            b.publisher,
-            b.publish_date,
-            b.cover_image_url,
-            COALESCE(br.average_rating, 0) AS average_rating,
-            COALESCE(br.num_ratings, 0) AS num_ratings
-        FROM listings l
-        JOIN books b ON l.book_id = b.id
-        LEFT JOIN book_ratings br ON b.id = br.book_id  -- if you store ratings separately
-        WHERE l.id = ?
-        LIMIT 1
-    `
+// func (ur *UserRepository) GetListingWithBookByID(ctx context.Context, listingID int) (*models.ListingDetails, error) {
+//     query := `
+//         SELECT 
+//             l.id AS listing_id,
+//             l.seller_id,
+//             l.book_id,
+//             l.price,
+//             l.status,
+//             l.allow_offers,
+//             b.title,
+//             b.author,
+//             b.description,
+//             b.language,
+//             b.isbn,
+//             b.publisher,
+//             b.publish_date,
+//             b.cover_image_url,
+//             COALESCE(br.average_rating, 0) AS average_rating,
+//             COALESCE(br.num_ratings, 0) AS num_ratings
+//         FROM listings l
+//         JOIN books b ON l.book_id = b.id
+//         LEFT JOIN book_ratings br ON b.id = br.book_id  -- if you store ratings separately
+//         WHERE l.id = ?
+//         LIMIT 1
+//     `
 
-    row := ur.db.QueryRowContext(ctx, query, listingID)
+//     row := ur.db.QueryRowContext(ctx, query, listingID)
 
-    var details models.ListingDetails
-    err := row.Scan(
-        &details.ListingID,
-        &details.SellerID,
-        &details.BookID,
-        &details.Price,
-        &details.Status,
-        &details.AllowOffers,
-        &details.Title,
-        &details.Author,
-        &details.Description,
-        &details.Language,
-        &details.ISBN,
-        &details.Publisher,
-        &details.PublishDate,
-        &details.CoverImageURL,
-        &details.AverageRating,
-        &details.NumRatings,
-    )
-    if err == sql.ErrNoRows {
-        // No row found
-        return nil, nil
-    } else if err != nil {
-        return nil, fmt.Errorf("error retrieving listing by ID: %w", err)
-    }
+//     var details models.ListingDetails
+//     err := row.Scan(
+//         &details.ListingID,
+//         &details.SellerID,
+//         &details.BookID,
+//         &details.Price,
+//         &details.Status,
+//         &details.AllowOffers,
+//         &details.Title,
+//         &details.Author,
+//         &details.Description,
+//         &details.Language,
+//         &details.ISBN,
+//         &details.Publisher,
+//         &details.PublishDate,
+//         &details.CoverImageURL,
+//         &details.AverageRating,
+//         &details.NumRatings,
+//     )
+//     if err == sql.ErrNoRows {
+//         // No row found
+//         return nil, nil
+//     } else if err != nil {
+//         return nil, fmt.Errorf("error retrieving listing by ID: %w", err)
+//     }
 
-    return &details, nil
-}
+//     return &details, nil
+// }
 
 // // UpdateStripeAccountID sets the stripe_account_id for a user
 // func (ur *UserRepository) UpdateStripeAccountID(ctx context.Context, userID int, accountID string) error {
@@ -723,7 +737,7 @@ func (ur *UserRepository) GetListingWithBookByID(ctx context.Context, listingID 
 func (ur *UserRepository) GetListingByID(ctx context.Context, listingID int) (*models.ListingDetails, error) {
     query := `
         SELECT 
-            l.id AS listing_id, l.seller_id, l.book_id, l.price, l.status, l.allow_offers, l.seller_omise_id,
+            l.id AS listing_id, l.seller_id, l.book_id, l.price, l.status, l.allow_offers, l.seller_note, l.seller_omise_id,
             b.title, b.author, b.description, b.language, b.isbn, b.publisher, 
             b.publish_date, b.cover_image_url, 
             COALESCE(br.average_rating, 0) AS average_rating, 
@@ -740,7 +754,7 @@ func (ur *UserRepository) GetListingByID(ctx context.Context, listingID int) (*m
     var listing models.ListingDetails
     err := ur.db.QueryRowContext(ctx, query, listingID).Scan(
         &listing.ListingID, &listing.SellerID, &listing.BookID, 
-        &listing.Price, &listing.Status, &listing.AllowOffers, &listing.SellerOmiseID,
+        &listing.Price, &listing.Status, &listing.AllowOffers, &listing.SellerNote, &listing.SellerOmiseID,
         &listing.Title, &listing.Author, &listing.Description, 
         &listing.Language, &listing.ISBN, &listing.Publisher, 
         &listing.PublishDate, &listing.CoverImageURL, 
@@ -751,6 +765,27 @@ func (ur *UserRepository) GetListingByID(ctx context.Context, listingID int) (*m
     if err != nil {
         return nil, err
     }
+
+	imageQuery := `
+        SELECT image_url 
+        FROM listing_images 
+        WHERE listing_id = ?
+    `
+    rows, err := ur.db.QueryContext(ctx, imageQuery, listingID)
+    if err != nil {
+        return nil, fmt.Errorf("error retrieving listing images: %w", err)
+    }
+    defer rows.Close()
+
+    var imageURLs []string
+    for rows.Next() {
+        var imageURL string
+        if err := rows.Scan(&imageURL); err != nil {
+            return nil, fmt.Errorf("error scanning listing image: %w", err)
+        }
+        imageURLs = append(imageURLs, imageURL)
+    }
+    listing.ImageURLs = imageURLs
 
     return &listing, nil
 }
@@ -869,16 +904,20 @@ func (ur *UserRepository) GetCart(ctx context.Context, userID int) ([]models.Car
             l.book_id,
             l.price,
             l.allow_offers,
-			l.seller_id,
+            l.seller_id,
             b.title,
             b.author,
-            b.cover_image_url
+            b.cover_image_url,
+            (SELECT image_url 
+             FROM listing_images li 
+             WHERE li.listing_id = l.id 
+             ORDER BY li.id ASC 
+             LIMIT 1) AS image_url
         FROM cart c
         JOIN listings l ON c.listing_id = l.id
         JOIN books b ON l.book_id = b.id
         WHERE c.user_id = ? AND l.status = 'for_sale'
     `
-	
 
     rows, err := ur.db.QueryContext(ctx, query, userID)
     if err != nil {
@@ -896,10 +935,11 @@ func (ur *UserRepository) GetCart(ctx context.Context, userID int) ([]models.Car
             &item.BookID,
             &item.Price,
             &item.AllowOffers,
-			&item.SellerID,
+            &item.SellerID,
             &item.BookTitle,
             &item.BookAuthor,
             &item.CoverImageURL,
+            &item.ImageURL, // Added for first image
         )
         if err != nil {
             return nil, fmt.Errorf("error scanning cart item: %w", err)
@@ -913,7 +953,6 @@ func (ur *UserRepository) GetCart(ctx context.Context, userID int) ([]models.Car
 
     return cartItems, nil
 }
-
 // RemoveFromCart removes a listing from a user's cart
 func (ur *UserRepository) RemoveFromCart(ctx context.Context, userID int, listingID int) error {
     query := `
@@ -1363,6 +1402,73 @@ func (ur *UserRepository) GetCommentsByPostID(ctx context.Context, postID int) (
     return comments, nil
 }
 
+// CreateLike adds a like to a post
+func (ur *UserRepository) CreateLike(ctx context.Context, postID, userID int) (models.Like, error) {
+    query := "INSERT INTO post_likes (post_id, user_id, created_at) VALUES (?, ?, NOW())"
+    result, err := ur.db.ExecContext(ctx, query, postID, userID)
+    if err != nil {
+        if strings.Contains(err.Error(), "Duplicate entry") {
+            return models.Like{}, fmt.Errorf("user %d already liked post %d", userID, postID)
+        }
+        return models.Like{}, fmt.Errorf("failed to create like: %v", err)
+    }
+
+    likeID, err := result.LastInsertId()
+    if err != nil {
+        return models.Like{}, err
+    }
+
+    var createdAt time.Time
+    err = ur.db.QueryRowContext(ctx, "SELECT created_at FROM post_likes WHERE id = ?", likeID).Scan(&createdAt)
+    if err != nil {
+        return models.Like{}, err
+    }
+
+    like := models.Like{
+        ID:        int(likeID),
+        PostID:    postID,
+        UserID:    userID,
+        CreatedAt: createdAt,
+    }
+    return like, nil
+}
+
+// RemoveLike removes a like from a post
+func (ur *UserRepository) RemoveLike(ctx context.Context, postID, userID int) error {
+    query := "DELETE FROM post_likes WHERE post_id = ? AND user_id = ?"
+    result, err := ur.db.ExecContext(ctx, query, postID, userID)
+    if err != nil {
+        return fmt.Errorf("failed to remove like: %v", err)
+    }
+    rowsAffected, err := result.RowsAffected()
+    if err != nil {
+        return err
+    }
+    if rowsAffected == 0 {
+        return fmt.Errorf("no like found for post %d by user %d", postID, userID)
+    }
+    return nil
+}
+
+// GetLikeCountByPostID returns the number of likes for a post
+func (ur *UserRepository) GetLikeCountByPostID(ctx context.Context, postID int) (int, error) {
+    var count int
+    err := ur.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM post_likes WHERE post_id = ?", postID).Scan(&count)
+    if err != nil {
+        return 0, fmt.Errorf("failed to get like count: %v", err)
+    }
+    return count, nil
+}
+
+// IsPostLikedByUser checks if a user has liked a post
+func (ur *UserRepository) IsPostLikedByUser(ctx context.Context, postID, userID int) (bool, error) {
+    var exists int
+    err := ur.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM post_likes WHERE post_id = ? AND user_id = ?", postID, userID).Scan(&exists)
+    if err != nil {
+        return false, fmt.Errorf("failed to check like status: %v", err)
+    }
+    return exists > 0, nil
+}
 
 // func (ur *UserRepository) AddUserLibraryEntry(ctx context.Context, entry models.UserLibrary) (int, error) {
 // 	query := `

@@ -91,7 +91,7 @@ type UserAddLibraryForm struct {
 	Status          string          `json:"status" db:"status"`
 	Price		float32          `json:"price" db:"price"`
 	AllowOffer     bool          `json:"allow_offers" db:"allow_offers"`
-	// PersonalNotes          string          `json:"personal_notes" db:"personal_notes"`
+	SellerNote          string          `json:"seller_note" db:"seller_note"`
 }
 
 
@@ -101,6 +101,7 @@ type UserLibrary struct {
 	BookID    int    `json:"book_id" db:"book_id"` // ✅ Necessary (foreign key)
 	Status    string `json:"status" db:"status"` // ✅ Necessary ('owned', 'not_own', 'wishlist')
 }
+
 
 
 type UserReview struct {
@@ -131,6 +132,7 @@ type ListingDetails struct {
     Price        float32 `json:"price"`
     Status       string  `json:"status"`
     AllowOffers  bool    `json:"allow_offers"`
+	SellerNote          string          `json:"seller_note" db:"seller_note"`
 
     // Book details
     Title         string    `json:"title"`
@@ -143,21 +145,24 @@ type ListingDetails struct {
     CoverImageURL string    `json:"cover_image_url,omitempty"`
     AverageRating string    `json:"average_rating,omitempty"`
     NumRatings    string    `json:"num_ratings,omitempty"`
+	ImageURLs     []string  `json:"image_urls"`
 }
 
 
 type CartItem struct {
-    ID           int     `json:"id"`
-    UserID       int     `json:"user_id"`
-    ListingID    int     `json:"listing_id"`
-    BookID       int     `json:"book_id"`
-    Price        float32 `json:"price"`
-    AllowOffers  bool    `json:"allow_offers"`
-    BookTitle    string  `json:"title"`
-    BookAuthor   string  `json:"author"`
-    CoverImageURL string `json:"cover_image_url"`
-	SellerID      int `json:"seller_id"`
+    ID            int     `json:"id"`
+    UserID        int     `json:"user_id"`
+    ListingID     int     `json:"listing_id"`
+    BookID        int     `json:"book_id"`
+    Price         float32 `json:"price"`
+    AllowOffers   bool    `json:"allow_offers"`
+    SellerID      int     `json:"seller_id"`
+    BookTitle     string  `json:"book_title"`
+    BookAuthor    string  `json:"book_author"`
+    CoverImageURL string  `json:"cover_image_url"`
+    ImageURL      string  `json:"image_url,omitempty"` // Added for first listing image
 }
+
 type UserPreferred struct {
     UserID       int     `json:"user_id"`
     GenreID 	 int     `json:"genre_id"`

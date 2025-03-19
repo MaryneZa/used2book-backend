@@ -68,8 +68,8 @@ func (us *UserService) EditPreferrence(ctx context.Context, userID int, quote st
 }
 
 
-func (us *UserService) AddBookToLibrary(ctx context.Context, userID int, bookID int, own_status string, price float32, allow_offer bool)  (bool, error) {
-	return us.userRepo.AddBookToLibrary(ctx , userID, bookID, own_status, price, allow_offer)
+func (us *UserService) AddBookToLibrary(ctx context.Context, userID int, bookID int, own_status string, price float32, allow_offer bool, imageURLs []string, seller_note string)  (bool, error) {
+	return us.userRepo.AddBookToLibrary(ctx , userID, bookID, own_status, price, allow_offer, imageURLs, seller_note)
 }
 
 func (us *UserService) CountUsers() (int, error) {
@@ -80,8 +80,8 @@ func (us *UserService) GetUserLibrary(ctx context.Context, userID int) ([]models
 	return us.userRepo.GetUserLibrary(ctx, userID)
 }
 
-func (us *UserService) GetAllListings(ctx context.Context, userID int) ([]models.UserListing, error){
-	return us.userRepo.GetAllListings(ctx, userID)
+func (us *UserService) GetAllListings(ctx context.Context) ([]models.UserListing, error){
+	return us.userRepo.GetAllListings(ctx)
 }
 
 func (us *UserService) GetAllListingsByBookID(ctx context.Context, userID int, bookID int) ([]models.UserListing, error){
@@ -100,9 +100,9 @@ func (us *UserService) IsBookInWishlist(ctx context.Context, userID int, bookID 
 	return us.userRepo.IsBookInWishlist(ctx, userID, bookID)
 }
 
-func (us *UserService) GetListingWithBookByID(ctx context.Context, listingID int) (*models.ListingDetails, error) {
-	return us.userRepo.GetListingWithBookByID(ctx, listingID)
-}
+// func (us *UserService) GetListingWithBookByID(ctx context.Context, listingID int) (*models.ListingDetails, error) {
+// 	return us.userRepo.GetListingWithBookByID(ctx, listingID)
+// }
 
 // // UpdateStripeAccountID sets the stripe_account_id for a user
 // func (us *UserService) UpdateStripeAccountID(ctx context.Context, userID int, accountID string) error {
@@ -193,6 +193,26 @@ func (us *UserService) CreateComment(ctx context.Context, postID, userID int, co
 // GetCommentsByPostID retrieves comments for a post
 func (us *UserService) GetCommentsByPostID(ctx context.Context, postID int) ([]models.Comment, error) {
     return us.userRepo.GetCommentsByPostID(ctx, postID)
+}
+
+// CreateLike adds a like to a post
+func (us *UserService) CreateLike(ctx context.Context, postID, userID int) (models.Like, error) {
+    return us.userRepo.CreateLike(ctx, postID, userID)
+}
+
+// RemoveLike removes a like from a post
+func (us *UserService) RemoveLike(ctx context.Context, postID, userID int) error {
+    return us.userRepo.RemoveLike(ctx, postID, userID)
+}
+
+// GetLikeCountByPostID gets the like count for a post
+func (us *UserService) GetLikeCountByPostID(ctx context.Context, postID int) (int, error) {
+    return us.userRepo.GetLikeCountByPostID(ctx, postID)
+}
+
+// IsPostLikedByUser checks if a user has liked a post
+func (us *UserService) IsPostLikedByUser(ctx context.Context, postID, userID int) (bool, error) {
+    return us.userRepo.IsPostLikedByUser(ctx, postID, userID)
 }
 
 

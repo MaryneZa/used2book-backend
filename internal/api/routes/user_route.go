@@ -54,7 +54,7 @@ func UserRoutes(db *sql.DB) http.Handler {
 	r.With(middleware.AuthMiddleware).Get("/book-wishlist/{bookID:[0-9]+}", userHandler.AddBookToWishListHandler)
 	r.With(middleware.AuthMiddleware).Get("/book-is-in-wishlist/{bookID:[0-9]+}", userHandler.IsBookInWishlistHandler)
 
-	r.With(middleware.AuthMiddleware).Get("/get-listing-by-id/{listingID:[0-9]+}", userHandler.GetListingWithBookByIDHandler)
+	r.With(middleware.AuthMiddleware).Get("/get-listing-by-id/{listingID:[0-9]+}", userHandler.GetListingByIDHandler)
 
 	r.Get("/all-users", userHandler.GetAllUsersHandler)
 
@@ -83,8 +83,12 @@ func UserRoutes(db *sql.DB) http.Handler {
 	r.With(middleware.AuthMiddleware).Get("/posts", userHandler.GetAllPostsHandler)
 	r.With(middleware.AuthMiddleware).Get("/user-posts/{userID:[0-9]+}", userHandler.GetPostsByUserIDHandler)
 
-	r.With(middleware.AuthMiddleware).Post("/user/comment-create", userHandler.CreateCommentHandler)
-	r.With(middleware.AuthMiddleware).Get("/user/comments", userHandler.GetCommentsByPostIDHandler) // e.g., /user/comments?post_id=1
+	r.With(middleware.AuthMiddleware).Post("/comment-create", userHandler.CreateCommentHandler)
+	r.With(middleware.AuthMiddleware).Get("/comments/{postID:[0-9]+}", userHandler.GetCommentsByPostIDHandler) // e.g., /user/comments?post_id=1
+
+	r.With(middleware.AuthMiddleware).Post("/like-toggle/{postID:[0-9]+}", userHandler.ToggleLikeHandler)
+	r.With(middleware.AuthMiddleware).Get("/like-count/{postID:[0-9]+}", userHandler.GetLikeCountHandler) // e.g., /user/comments?post_id=1
+	r.With(middleware.AuthMiddleware).Get("/like-check/{postID:[0-9]+}", userHandler.IsPostLikedHandler) // e.g., /user/comments?post_id=1
 
 	// r.Get("/post", uh.GetPostByPostIDHandler) // e.g., /post?post_id=1
 

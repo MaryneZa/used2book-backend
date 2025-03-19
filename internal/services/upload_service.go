@@ -34,15 +34,6 @@ func (s *UploadService) UploadProfileImage(userID int, file io.Reader, fileName 
 	return uploadURL, nil
 }
 
-func (s *UploadService) UploadPostImageURL(file io.Reader, fileName string) (string, error) {
-	// ✅ Upload to ImageKit.io
-	uploadURL, err := utils.UploadToImageKit(file, fileName)
-	if err != nil {
-		return "", fmt.Errorf("upload failed: %v", err)
-	}
-
-	return uploadURL, nil
-}
 
 // ✅ UploadProfileImage uploads an image & saves the URL
 func (s *UploadService) UploadBackgroundImage(userID int, file io.Reader, fileName string) (string, error) {
@@ -51,11 +42,21 @@ func (s *UploadService) UploadBackgroundImage(userID int, file io.Reader, fileNa
 	if err != nil {
 		return "", fmt.Errorf("upload failed: %v", err)
 	}
-
+	
 	// ✅ Save Image URL to Database
 	err = s.userRepo.SaveBackgroundImage(userID, uploadURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to update user record: %v", err)
+	}
+	
+	return uploadURL, nil
+}
+
+func (s *UploadService) UploadImageURL(file io.Reader, fileName string) (string, error) {
+	// ✅ Upload to ImageKit.io
+	uploadURL, err := utils.UploadToImageKit(file, fileName)
+	if err != nil {
+		return "", fmt.Errorf("upload failed: %v", err)
 	}
 
 	return uploadURL, nil
