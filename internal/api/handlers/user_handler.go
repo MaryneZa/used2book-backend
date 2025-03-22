@@ -21,6 +21,12 @@ type CreatePaymentRequest struct {
 	// Possibly other fields, e.g. quantity, shipping, etc.
 }
 
+func (uh *UserHandler) TestPort(w http.ResponseWriter, r *http.Request) {
+	sendSuccessResponse(w, map[string]interface{}{
+		"success": true,
+	})
+}
+
 func (uh *UserHandler) GetAllUsersHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Call the BookService method to get the total book count
@@ -313,64 +319,71 @@ func (uh *UserHandler) EditPreferrenceHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (uh *UserHandler) AddBookToLibraryHandler(w http.ResponseWriter, r *http.Request) {
-	// Parse multipart form (for JSON and files)
-	err := r.ParseMultipartForm(10 << 20) // 10MB max
-	if err != nil {
-		log.Println("Parse Form Error:", err)
-		sendErrorResponse(w, http.StatusBadRequest, "Invalid form data")
-		return
-	}
+    // Parse multipart form (for JSON and files)
+    err := r.ParseMultipartForm(10 << 20) // 10MB max
+    if err != nil {
+        log.Println("Parse Form Error:", err)
+        sendErrorResponse(w, http.StatusBadRequest, "Invalid form data")
+        return
+    }
 
-	// Get JSON data from form field 'data'
-	jsonData := r.FormValue("data")
-	var user models.UserAddLibraryForm
-	if err := json.Unmarshal([]byte(jsonData), &user); err != nil {
-		log.Println("JSON Decode Error:", err)
-		sendErrorResponse(w, http.StatusBadRequest, "Invalid JSON format")
-		return
-	}
+    // Get JSON data from form field 'data'
+    jsonData := r.FormValue("data")
+    var user models.UserAddLibraryForm
+    if err := json.Unmarshal([]byte(jsonData), &user); err != nil {
+        log.Println("JSON Decode Error:", err)
+        sendErrorResponse(w, http.StatusBadRequest, "Invalid JSON format")
+        return
+    }
 
-	userID, ok := r.Context().Value("user_id").(int)
-	if !ok {
-		sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
-		return
-	}
+    userID, ok := r.Context().Value("user_id").(int)
+    if !ok {
+        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+        return
+    }
 
-	files := r.MultipartForm.File["images"] // Get all files under "images" key
-	if len(files) == 0 {
-		sendErrorResponse(w, http.StatusBadRequest, "No images provided")
-		return
-	}
+    // Require images only if status is "owned"
+    files := r.MultipartForm.File["images"]
+    if user.Status == "owned" && len(files) == 0 {
+        sendErrorResponse(w, http.StatusBadRequest, "At least one image is required for owned books")
+        return
+    }
 
-	var uploadURLs []string
-	for _, handler := range files {
-		file, err := handler.Open()
-		if err != nil {
-			sendErrorResponse(w, http.StatusInternalServerError, "Error opening file")
-			return
-		}
-		defer file.Close()
+    var uploadURLs []string
+    if len(files) > 0 { // Only process images if provided
+        for _, handler := range files {
+            file, err := handler.Open()
+            if err != nil {
+                sendErrorResponse(w, http.StatusInternalServerError, "Error opening file")
+                return
+            }
+            defer file.Close()
 
-		url, err := uh.UploadService.UploadImageURL(file, handler.Filename) // Reuse existing service
-		if err != nil {
-			sendErrorResponse(w, http.StatusInternalServerError, "Image upload failed: "+err.Error())
-			return
-		}
-		uploadURLs = append(uploadURLs, url)
-	}
+            url, err := uh.UploadService.UploadImageURL(file, handler.Filename)
+            if err != nil {
+                sendErrorResponse(w, http.StatusInternalServerError, "Image upload failed: "+err.Error())
+                return
+            }
+            uploadURLs = append(uploadURLs, url)
+        }
+    }
 
-	_, err = uh.UserService.AddBookToLibrary(r.Context(), userID, user.BookID, user.Status, user.Price, user.AllowOffer, uploadURLs, user.SellerNote)
-	if err != nil {
-		sendErrorResponse(w, http.StatusConflict, "Edit Preference "+err.Error())
-		return
-	}
+    addedToLibrary, err := uh.UserService.AddBookToLibrary(r.Context(), userID, user.BookID, user.Status, user.Price, user.AllowOffer, uploadURLs, user.SellerNote)
+    if err != nil {
+        sendErrorResponse(w, http.StatusConflict, "Failed to process book: "+err.Error())
+        return
+    }
 
-	sendSuccessResponse(w, map[string]interface{}{
-		"success": true,
-		"message": "Book added to library successfully!",
-	})
+    message := "Book listing added successfully!"
+    if addedToLibrary {
+        message = "Book added to library and listing successfully!"
+    }
+
+    sendSuccessResponse(w, map[string]interface{}{
+        "success": true,
+        "message": message,
+    })
 }
-
 func (uh *UserHandler) AddBookToWishListHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("📡 Incoming request: AddBookToWishListHandler")
 
@@ -669,6 +682,34 @@ func (uh *UserHandler) GetCartHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func (uh *UserHandler) RemoveListingHandler(w http.ResponseWriter, r *http.Request) {
+    userID, ok := r.Context().Value("user_id").(int)
+    if !ok {
+        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+        return
+    }
+
+	listingIDStr := chi.URLParam(r, "listingID")
+
+	listingID, err := strconv.Atoi(listingIDStr) // Convert to int
+	log.Println("listingID: ", listingID)
+	if err != nil {
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid listing ID")
+		return
+	}
+
+    err = uh.UserService.RemoveListing(r.Context(), userID, listingID)
+    if err != nil {
+        sendErrorResponse(w, http.StatusBadRequest, err.Error())
+        return
+    }
+
+    sendSuccessResponse(w, map[string]interface{}{
+        "success": true,
+        "message": "Listing removed successfully",
+    })
+}
+
 func (uh *UserHandler) AddToCartHandler(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
@@ -736,6 +777,195 @@ func (uh *UserHandler) RemoveFromCartHandler(w http.ResponseWriter, r *http.Requ
 		"message": "delete listing in cart successfully!",
 	})
 
+}
+
+func (uh *UserHandler) AddToOffersHandler(w http.ResponseWriter, r *http.Request) {
+    var req struct {
+        ListingID    int     `json:"listingId"`
+        OfferedPrice float64 `json:"offeredPrice"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Invalid request", http.StatusBadRequest)
+        return
+    }
+
+    buyerID, ok := r.Context().Value("user_id").(int)
+    if !ok {
+        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+        return
+    }
+
+    log.Println("listingID:", req.ListingID, "offeredPrice:", req.OfferedPrice)
+
+    id, err := uh.UserService.AddToOffers(r.Context(), buyerID, req.ListingID, req.OfferedPrice)
+    if err != nil {
+        log.Println("❌ Add offer error:", err)
+        sendErrorResponse(w, http.StatusConflict, "Offer error: "+err.Error())
+        return
+    }
+
+    log.Println("✅ Added offer successfully with ID:", id)
+    sendSuccessResponse(w, map[string]interface{}{
+        "success": true,
+        "message": "Offer added successfully!",
+        "offerId": id,
+    })
+}
+
+func (uh *UserHandler) GetBuyerOffersHandler(w http.ResponseWriter, r *http.Request) {
+    buyerID := r.Context().Value("user_id").(int)
+
+    offers, err := uh.UserService.GetBuyerOffers(r.Context(), buyerID)
+    if err != nil {
+        http.Error(w, "Failed to fetch user offers", http.StatusInternalServerError)
+        return
+    }
+
+    sendSuccessResponse(w, map[string]interface{}{
+        "offers": offers,
+    })
+}
+
+func (uh *UserHandler) GetSellerOffersHandler(w http.ResponseWriter, r *http.Request) {
+    sellerID, ok := r.Context().Value("user_id").(int)
+    if !ok {
+        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+        return
+    }
+
+    offers, err := uh.UserService.GetSellerOffers(r.Context(), sellerID)
+    if err != nil {
+        http.Error(w, "Failed to fetch seller offers", http.StatusInternalServerError)
+        return
+    }
+
+    sendSuccessResponse(w, map[string]interface{}{
+        "offers": offers,
+    })
+}
+
+func (uh *UserHandler) RemoveFromOffersHandler(w http.ResponseWriter, r *http.Request) {
+    var req struct {
+        ListingID int `json:"listingId"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Invalid request", http.StatusBadRequest)
+        return
+    }
+
+    buyerID, ok := r.Context().Value("user_id").(int)
+    if !ok {
+        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+        return
+    }
+
+    err := uh.UserService.RemoveFromOffers(r.Context(), buyerID, req.ListingID)
+    if err != nil {
+        log.Println("❌ Remove offer error:", err)
+        sendErrorResponse(w, http.StatusConflict, "Offer error: "+err.Error())
+        return
+    }
+
+    log.Println("✅ Offer removed successfully")
+    sendSuccessResponse(w, map[string]interface{}{
+        "success": true,
+        "message": "Offer removed successfully!",
+    })
+}
+
+func (uh *UserHandler) AcceptOfferHandler(w http.ResponseWriter, r *http.Request) {
+    var req struct {
+        OfferID int `json:"offerId"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Invalid request", http.StatusBadRequest)
+        return
+    }
+
+    sellerID, ok := r.Context().Value("user_id").(int)
+    if !ok {
+        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+        return
+    }
+
+    err := uh.UserService.AcceptOffer(r.Context(), sellerID, req.OfferID)
+    if err != nil {
+        log.Println("❌ Accept offer error:", err)
+        sendErrorResponse(w, http.StatusConflict, "Offer error: "+err.Error())
+        return
+    }
+
+    sendSuccessResponse(w, map[string]interface{}{
+        "success": true,
+        "message": "Offer accepted successfully!",
+    })
+}
+
+func (uh *UserHandler) RejectOfferHandler(w http.ResponseWriter, r *http.Request) {
+    var req struct {
+        OfferID int `json:"offerId"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        http.Error(w, "Invalid request", http.StatusBadRequest)
+        return
+    }
+
+    sellerID, ok := r.Context().Value("user_id").(int)
+    if !ok {
+        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+        return
+    }
+
+    err := uh.UserService.RejectOffer(r.Context(), sellerID, req.OfferID)
+    if err != nil {
+        log.Println("❌ Reject offer error:", err)
+        sendErrorResponse(w, http.StatusConflict, "Offer error: "+err.Error())
+        return
+    }
+
+    sendSuccessResponse(w, map[string]interface{}{
+        "success": true,
+        "message": "Offer rejected successfully!",
+    })
+}
+
+// handler/user_handler.go
+func (uh *UserHandler) GetAcceptedOfferHandler(w http.ResponseWriter, r *http.Request) {
+    // offerIDStr := r.URL.Path[len("/offers/") : strings.Index(r.URL.Path, "/payment")]
+    // offerID, err := strconv.Atoi(offerIDStr)
+    // if err != nil {
+    //     sendErrorResponse(w, http.StatusBadRequest, "Invalid offer ID")
+    //     return
+    // }
+	offerIDStr := chi.URLParam(r, "offerID")
+
+	offerID, err := strconv.Atoi(offerIDStr) // Convert to int
+	log.Println("offerID: ", offerID)
+	if err != nil {
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid listing ID")
+		return
+	}
+
+    buyerID, ok := r.Context().Value("user_id").(int)
+    if !ok {
+        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+        return
+    }
+
+    offer, err := uh.UserService.GetAcceptedOffer(r.Context(), offerID)
+    if err != nil {
+        sendErrorResponse(w, http.StatusNotFound, "Offer not found or not accepted")
+        return
+    }
+
+    if offer.BuyerID != buyerID {
+        sendErrorResponse(w, http.StatusForbidden, "You are not the buyer of this offer")
+        return
+    }
+
+    sendSuccessResponse(w, map[string]interface{}{
+        "offer": offer,
+    })
 }
 
 func (uh *UserHandler) UploadPostImagesHandler(w http.ResponseWriter, r *http.Request) {

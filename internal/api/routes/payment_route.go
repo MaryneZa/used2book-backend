@@ -30,7 +30,7 @@ func PaymentRoutes(db *sql.DB) http.Handler {
 	r.With(middleware.AuthMiddleware).Post("/api/omise/create-account", paymentHandler.CreateOrUpdateOmiseAccountHandler) // Create Omise account for sellers
 	r.With(middleware.AuthMiddleware).Post("/charge", paymentHandler.ChargeHandler)
 	r.With(middleware.AuthMiddleware).Post("/omise/create-account", paymentHandler.CreateOrUpdateOmiseAccountHandler)
-	r.With(middleware.AuthMiddleware).Post("/webhook", paymentHandler.WebhookHandler)
+	r.Post("/webhook", paymentHandler.WebhookHandler)
 	r.With(middleware.AuthMiddleware).Get("/omise/bank-account", paymentHandler.GetBankAccountInfoHandler)
 
 	// Future payment-related routes can be added here

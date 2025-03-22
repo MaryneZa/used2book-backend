@@ -24,40 +24,38 @@ func NewOmiseService() *OmiseService {
 	return &OmiseService{Client: client}
 }
 
-// CreatePromptPayCharge creates a PromptPay charge with a custom expiration
-func (o *OmiseService) CreatePromptPayCharge(amount int64, listingID int, sellerRecipientID string, buyerID int, expiresInMinutes int) (*omise.Charge, error) {
-	// Step 1: Create a PromptPay source
-	source := &omise.Source{}
-	createSource := &operations.CreateSource{
-		Type:     "promptpay",
-		Amount:   amount,
-		Currency: "THB",
-	}
-	err := o.Client.Do(source, createSource)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create PromptPay source: %v", err)
-	}
+// services/omise_service.go
+func (o *OmiseService) CreatePromptPayCharge(amount int64, listingID int, sellerRecipientID string, buyerID int, expiresInMinutes int, offerID *int) (*omise.Charge, error) {
+    source := &omise.Source{}
+    createSource := &operations.CreateSource{
+        Type:     "promptpay",
+        Amount:   amount,
+        Currency: "THB",
+    }
+    if err := o.Client.Do(source, createSource); err != nil {
+        return nil, fmt.Errorf("failed to create PromptPay source: %v", err)
+    }
 
-	// Step 2: Create the charge using the source ID
-	charge := &omise.Charge{}
-	expiresAt := time.Now().Add(time.Duration(expiresInMinutes) * time.Minute) // Keep as time.Time
-	createCharge := &operations.CreateCharge{
-		Amount:      amount,
-		Currency:    "THB",
-		Source:      source.ID, // Use the source ID (string)
-		Description: fmt.Sprintf("Book purchase for listing %d", listingID),
-		ExpiresAt:   &expiresAt, // Pass pointer to time.Time
-		Metadata: map[string]interface{}{
-			"seller_id":  sellerRecipientID,
-			"listing_id": listingID,
-			"buyer_id":   buyerID,
-		},
-	}
-	err = o.Client.Do(charge, createCharge)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create PromptPay charge: %v", err)
-	}
-	return charge, nil
+    charge := &omise.Charge{}
+    expiresAt := time.Now().Add(time.Duration(expiresInMinutes) * time.Minute)
+    createCharge := &operations.CreateCharge{
+        Amount:      amount,
+        Currency:    "THB",
+        Source:      source.ID,
+        Description: fmt.Sprintf("Book purchase for listing %d", listingID),
+        ExpiresAt:   &expiresAt,
+        Metadata: map[string]interface{}{
+            "listing_id": listingID,
+            "buyer_id":   buyerID,
+        },
+    }
+    if offerID != nil {
+        createCharge.Metadata["offer_id"] = *offerID
+    }
+    if err := o.Client.Do(charge, createCharge); err != nil {
+        return nil, fmt.Errorf("failed to create PromptPay charge: %v", err)
+    }
+    return charge, nil
 }
 
 // GetRecipient fetches a recipient's details from Omise

@@ -27,6 +27,9 @@ func UserRoutes(db *sql.DB) http.Handler {
 
 	r := chi.NewRouter()
 
+	r.Get("/test", userHandler.TestPort)
+
+
 	r.With(middleware.AuthMiddleware).Get("/me", userHandler.GetMeHandler)
 	
 	r.With(middleware.AuthMiddleware).Post("/upload-profile-image", userHandler.UploadProfileImageHandler)
@@ -46,6 +49,7 @@ func UserRoutes(db *sql.DB) http.Handler {
 	r.With(middleware.AuthMiddleware).Get("/get-library/{userID:[0-9]+}", userHandler.GetUserLibraryHandler)
 	r.With(middleware.AuthMiddleware).Get("/get-wishlist/{userID:[0-9]+}", userHandler.GetUserWishlist)
 
+	r.With(middleware.AuthMiddleware).Post("/listing/remove/{listingID:[0-9]+}", userHandler.RemoveListingHandler)
 
 	r.Get("/user-info/{userID:[0-9]+}", userHandler.GetUserByIDHandler)
 	r.With(middleware.AuthMiddleware).Get("/user-wishlist/{userID:[0-9]+}", userHandler.GetUserWishlist)
@@ -76,6 +80,14 @@ func UserRoutes(db *sql.DB) http.Handler {
 	r.With(middleware.AuthMiddleware).Post("/cart", userHandler.AddToCartHandler)
 	r.With(middleware.AuthMiddleware).Get("/cart", userHandler.GetCartHandler)
 	r.With(middleware.AuthMiddleware).Post("/cart-rm", userHandler.RemoveFromCartHandler)
+
+	r.With(middleware.AuthMiddleware).Post("/offers", userHandler.AddToOffersHandler)
+	r.With(middleware.AuthMiddleware).Get("/offers/buyer", userHandler.GetBuyerOffersHandler)
+	r.With(middleware.AuthMiddleware).Get("/offers/seller", userHandler.GetSellerOffersHandler)
+    r.With(middleware.AuthMiddleware).Post("/offers-rm", userHandler.RemoveFromOffersHandler)
+	r.With(middleware.AuthMiddleware).Post("/offers/accept", userHandler.AcceptOfferHandler)
+	r.With(middleware.AuthMiddleware).Post("/offers/reject", userHandler.RejectOfferHandler)
+	r.With(middleware.AuthMiddleware).Get("/offers/{offerID:[0-9]+}/payment", userHandler.GetAcceptedOfferHandler)
 
 	r.With(middleware.AuthMiddleware).Post("/post-create", userHandler.CreatePostHandler)
 	r.With(middleware.AuthMiddleware).Post("/upload-post-images", userHandler.UploadPostImagesHandler)

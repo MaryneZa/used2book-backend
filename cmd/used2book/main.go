@@ -16,22 +16,21 @@ import (
    
 )
 
+// log.Println("ENV - main" ,os.Getenv("ENV"))
+
+// if os.Getenv("ENV") != "production" {
+//     if err := godotenv.Load(); err != nil {
+//         log.Println("Warning: .env file not found, using system environment variables - main")
+//     }
+// }
+
 func main() {
 
 	if err := godotenv.Load(); err != nil {
 		log.Println("No .env file found")
 	}
-	// log.Println("ENV - main" ,os.Getenv("ENV"))
 
-	// if os.Getenv("ENV") != "production" {
-    //     if err := godotenv.Load(); err != nil {
-    //         log.Println("Warning: .env file not found, using system environment variables - main")
-    //     }
-    // }
 
-	
-
-	
 
 	db := utils.GetDB()
 
@@ -41,17 +40,8 @@ func main() {
 
 	// Assign the shared Redis client to the twiliootp package.
 	twiliootp.RedisClient = utils.RedisClient
-
-	// Initialize Twilio.
-
-	// err := utils.InitFirebase()
-	// if err != nil {
-	//     log.Fatalf("cannot init firebase: %v", err)
-	// }
     
 	router := api.SetupRouter(db)
-
-
 
 	utils.RunMigrations()
 

@@ -114,6 +114,10 @@ func (us *UserService) GetListingByID(ctx context.Context, listingID int) (*mode
     return us.userRepo.GetListingByID(ctx, listingID)
 }
 
+func (us *UserService) RemoveListing(ctx context.Context, userID int, listingID int) error {
+    return us.userRepo.RemoveListing(ctx, userID, listingID)
+}
+
 func (us *UserService) MarkListingAsSold(ctx context.Context, listingID int, buyerID int, amount float64) error {
 	return us.userRepo.MarkListingAsSold(ctx, listingID, buyerID, amount)
 }
@@ -138,14 +142,55 @@ func (us *UserService) GetCart(ctx context.Context, userID int) ([]models.CartIt
 	return us.userRepo.GetCart(ctx, userID)
 }
 
+func (us *UserService) AddToOffers(ctx context.Context, buyerID int, listingID int, offeredPrice float64) (int, error) {
+    return us.userRepo.AddToOffers(ctx, buyerID, listingID, offeredPrice)
+}
+
+func (us *UserService) GetBuyerOffers(ctx context.Context, buyerID int) ([]models.OfferItem, error) {
+    return us.userRepo.GetBuyerOffers(ctx, buyerID)
+}
+
+func (us *UserService) GetSellerOffers(ctx context.Context, sellerID int) ([]models.OfferItem, error) {
+    return us.userRepo.GetSellerOffers(ctx, sellerID)
+}
+
+func (us *UserService) RemoveFromOffers(ctx context.Context, buyerID int, listingID int) error {
+    return us.userRepo.RemoveFromOffers(ctx, buyerID, listingID)
+}
+
+func (us *UserService) AcceptOffer(ctx context.Context, sellerID int, offerID int) error {
+    return us.userRepo.AcceptOffer(ctx, sellerID, offerID)
+}
+
+func (us *UserService) RejectOffer(ctx context.Context, sellerID int, offerID int) error {
+    return us.userRepo.RejectOffer(ctx, sellerID, offerID)
+}
+
 func (us *UserService) ReserveListing(ctx context.Context, listingID int, timeoutMinutes int) (bool, error) {
 	return us.userRepo.ReserveListing(ctx, listingID, timeoutMinutes)
+}
+
+// service/user_service.go
+func (us *UserService) GetAcceptedOffer(ctx context.Context, offerID int) (*models.OfferItem, error) {
+    return us.userRepo.GetAcceptedOffer(ctx, offerID)
+}
+
+func (us *UserService) GetOfferByID(ctx context.Context, offerID int) (*models.OfferItem, error) {
+    return us.userRepo.GetOfferByID(ctx, offerID)
+}
+
+func (us *UserService) ReserveListingForOffer(ctx context.Context, listingID int, buyerID int) (bool, error) {
+    return us.userRepo.ReserveListingForOffer(ctx, listingID, buyerID)
 }
 
 func (us *UserService) ExpireReservedListing(ctx context.Context, listingID int) error {
 	return us.userRepo.ExpireReservedListing(ctx, listingID)
 }
 
+// service/user_service.go
+func (us *UserService) RevertOfferReservation(ctx context.Context, listingID int, offerID int) error {
+    return us.userRepo.RevertOfferReservation(ctx, listingID, offerID)
+}
 func (us *UserService) CreateTransaction(ctx context.Context, buyerID, sellerID, listingID int, amount float64, status string) error {
 	return us.userRepo.CreateTransaction(ctx, buyerID, sellerID, listingID, amount, status)
 }
