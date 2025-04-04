@@ -319,6 +319,38 @@ func (uh *UserHandler) EditPreferrenceHandler(w http.ResponseWriter, r *http.Req
 }
 
 func (uh *UserHandler) AddBookToLibraryHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		BookID int `json:"book_id"`
+		ReadingStatus int `json:"reading_status"`
+	}
+	
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("Decoded request: %+v\n", req)
+
+	userID, ok := r.Context().Value("user_id").(int)
+    if !ok {
+        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+        return
+    }
+
+    _ , err := uh.UserService.AddBookToLibrary(r.Context(), userID, req.BookID, req.ReadingStatus)
+    if err != nil {
+        sendErrorResponse(w, http.StatusConflict, "Failed to process book: "+err.Error())
+        return
+    }
+
+
+    sendSuccessResponse(w, map[string]interface{}{
+        "success": true,
+        "message": "add to library successfully",
+    })
+}
+
+func (uh *UserHandler) AddBookToListingHandler(w http.ResponseWriter, r *http.Request) {
     // Parse multipart form (for JSON and files)
     err := r.ParseMultipartForm(10 << 20) // 10MB max
     if err != nil {
@@ -329,7 +361,7 @@ func (uh *UserHandler) AddBookToLibraryHandler(w http.ResponseWriter, r *http.Re
 
     // Get JSON data from form field 'data'
     jsonData := r.FormValue("data")
-    var user models.UserAddLibraryForm
+    var user models.UserAddListingForm
     if err := json.Unmarshal([]byte(jsonData), &user); err != nil {
         log.Println("JSON Decode Error:", err)
         sendErrorResponse(w, http.StatusBadRequest, "Invalid JSON format")
@@ -342,12 +374,7 @@ func (uh *UserHandler) AddBookToLibraryHandler(w http.ResponseWriter, r *http.Re
         return
     }
 
-    // Require images only if status is "owned"
     files := r.MultipartForm.File["images"]
-    if user.Status == "owned" && len(files) == 0 {
-        sendErrorResponse(w, http.StatusBadRequest, "At least one image is required for owned books")
-        return
-    }
 
     var uploadURLs []string
     if len(files) > 0 { // Only process images if provided
@@ -368,20 +395,15 @@ func (uh *UserHandler) AddBookToLibraryHandler(w http.ResponseWriter, r *http.Re
         }
     }
 
-    addedToLibrary, err := uh.UserService.AddBookToLibrary(r.Context(), userID, user.BookID, user.Status, user.Price, user.AllowOffer, uploadURLs, user.SellerNote)
+    _, err = uh.UserService.AddBookToListing(r.Context(), userID, user.BookID, user.Price, user.AllowOffer, uploadURLs, user.SellerNote)
     if err != nil {
         sendErrorResponse(w, http.StatusConflict, "Failed to process book: "+err.Error())
         return
     }
 
-    message := "Book listing added successfully!"
-    if addedToLibrary {
-        message = "Book added to library and listing successfully!"
-    }
-
     sendSuccessResponse(w, map[string]interface{}{
         "success": true,
-        "message": message,
+        "message": "Book listing added successfully!",
     })
 }
 func (uh *UserHandler) AddBookToWishListHandler(w http.ResponseWriter, r *http.Request) {
@@ -407,20 +429,18 @@ func (uh *UserHandler) AddBookToWishListHandler(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// ✅ Call service to toggle wishlist and get status
-	inWishlist, err := uh.UserService.AddBookToLibrary(r.Context(), userID, bookID, "wishlist", 0, false, []string{}, "")
+	in_wishlist, err := uh.UserService.AddBookToWishlist(r.Context(), userID, bookID)
 	if err != nil {
 		log.Println("❌ Wishlist Error:", err)
 		sendErrorResponse(w, http.StatusConflict, "Wishlist error: "+err.Error())
 		return
 	}
 
-	// ✅ Return updated wishlist status
 	log.Println("✅ Wishlist updated successfully")
 	sendSuccessResponse(w, map[string]interface{}{
 		"success":     true,
 		"message":     "Wishlist updated successfully!",
-		"in_wishlist": inWishlist, // ✅ Return wishlist status for button toggle
+		"in_wishlist": in_wishlist,
 	})
 }
 
@@ -608,7 +628,6 @@ func (uh *UserHandler) GetMyWishlist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send the wishlist as a JSON response
 	sendSuccessResponse(w, map[string]interface{}{
 		"wishlist": wishlist,
 	})
@@ -625,7 +644,6 @@ func (uh *UserHandler) GetUserWishlist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Call the UserService to get the user's wishlist
 	wishlist, err := uh.UserService.GetWishlistByUserID(r.Context(), userID)
 	if err != nil {
 		// Handle the error, e.g., return a 500 Internal Server Error
@@ -633,7 +651,6 @@ func (uh *UserHandler) GetUserWishlist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send the wishlist as a JSON response
 	sendSuccessResponse(w, map[string]interface{}{
 		"wishlist": wishlist,
 	})
@@ -650,7 +667,6 @@ func (uh *UserHandler) GetListingByIDHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Call the UserService to get the user's wishlist
 	listing, err := uh.UserService.GetListingByID(r.Context(), listingID)
 	if err != nil {
 		// Handle the error, e.g., return a 500 Internal Server Error
@@ -658,7 +674,6 @@ func (uh *UserHandler) GetListingByIDHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Send the wishlist as a JSON response
 	sendSuccessResponse(w, map[string]interface{}{
 		"listing": listing,
 	})
@@ -667,7 +682,6 @@ func (uh *UserHandler) GetListingByIDHandler(w http.ResponseWriter, r *http.Requ
 func (uh *UserHandler) GetCartHandler(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value("user_id").(int)
 
-	// Call the UserService to get the user's wishlist
 	carts, err := uh.UserService.GetCart(r.Context(), userID)
 	if err != nil {
 		// Handle the error, e.g., return a 500 Internal Server Error
@@ -675,7 +689,6 @@ func (uh *UserHandler) GetCartHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send the wishlist as a JSON response
 	sendSuccessResponse(w, map[string]interface{}{
 		"carts": carts,
 	})
@@ -730,7 +743,6 @@ func (uh *UserHandler) AddToCartHandler(w http.ResponseWriter, r *http.Request) 
 
 	log.Println("listingID:", req.ListingId)
 
-	// ✅ Call service to toggle wishlist and get status
 	_, err := uh.UserService.AddToCart(r.Context(), userID, req.ListingId)
 	if err != nil {
 		log.Println("❌ Add listing to cart Error:", err)
@@ -738,7 +750,6 @@ func (uh *UserHandler) AddToCartHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// ✅ Return updated wishlist status
 	log.Println("✅ Add listing to cart successfully")
 	sendSuccessResponse(w, map[string]interface{}{
 		"success": true,
@@ -762,7 +773,6 @@ func (uh *UserHandler) RemoveFromCartHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// ✅ Call service to toggle wishlist and get status
 	err := uh.UserService.RemoveFromCart(r.Context(), userID, req.ListingId)
 	if err != nil {
 		log.Println("❌ Wishlist Error:", err)
@@ -770,7 +780,6 @@ func (uh *UserHandler) RemoveFromCartHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// ✅ Return updated wishlist status
 	log.Println("✅ Wishlist updated successfully")
 	sendSuccessResponse(w, map[string]interface{}{
 		"success": true,
@@ -1170,7 +1179,6 @@ func (uh *UserHandler) MarkListingAsSoldHandler(w http.ResponseWriter, r *http.R
 }
 
 func (uh *UserHandler) GetAllUserReview(w http.ResponseWriter, r *http.Request) {
-	// Call the UserService to get the user's wishlist
 	reviews, err := uh.UserService.GetAllUserReview(r.Context())
 	if err != nil {
 		log.Printf("Failed to fetch user reviews: %v", err) // Log the error
@@ -1178,14 +1186,12 @@ func (uh *UserHandler) GetAllUserReview(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Send the wishlist as a JSON response
 	sendSuccessResponse(w, map[string]interface{}{
 		"reviews": reviews,
 	})
 }
 
 func (uh *UserHandler) GetAllUserPreferred(w http.ResponseWriter, r *http.Request) {
-	// Call the UserService to get the user's wishlist
 	user_preferred_genres, err := uh.UserService.GetAllUserPreferred(r.Context())
 	if err != nil {
 		log.Printf("Failed to fetch user user_preferred_genres: %v", err) // Log the error
@@ -1193,54 +1199,80 @@ func (uh *UserHandler) GetAllUserPreferred(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Send the wishlist as a JSON response
 	sendSuccessResponse(w, map[string]interface{}{
 		"user_preferred_genres": user_preferred_genres,
 	})
 }
 
+// handler/user_handler.go
 func (uh *UserHandler) CreatePostHandler(w http.ResponseWriter, r *http.Request) {
-	// Parse multipart form (10MB max)
-	err := r.ParseMultipartForm(10 << 20)
-	if err != nil {
-		log.Println("Parse Form Error:", err)
-		sendErrorResponse(w, http.StatusBadRequest, "Invalid form data")
-		return
-	}
+    // Parse multipart form (10MB max)
+    err := r.ParseMultipartForm(10 << 20)
+    if err != nil {
+        log.Println("Parse Form Error:", err)
+        sendErrorResponse(w, http.StatusBadRequest, "Invalid form data")
+        return
+    }
 
-	// Log the form data for debugging
-	log.Println("Form Data:", r.Form)
+    // Log the form data for debugging
+    log.Println("Form Data:", r.Form)
 
-	// Get content
-	content := r.FormValue("content")
-	if content == "" {
-		sendErrorResponse(w, http.StatusBadRequest, "Content is required")
-		return
-	}
+    // Get content
+    content := r.FormValue("content")
+    if content == "" {
+        sendErrorResponse(w, http.StatusBadRequest, "Content is required")
+        return
+    }
 
-	// Get image URLs (optional, from form field)
-	imageURLs := r.Form["image_urls"] // Multiple values if sent as array
+    // Get image URLs (optional, from form field)
+    imageURLs := r.Form["image_urls"] // Multiple values if sent as array
 
-	// Get userID from context
-	userID, ok := r.Context().Value("user_id").(int)
-	if !ok {
-		sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
-		return
-	}
+    // Get genre_id and book_id (optional)
+    var genreID *int
+    var bookID *int
+    if genreStr := r.FormValue("genre_id"); genreStr != "" {
+        id, err := strconv.Atoi(genreStr)
+        if err != nil {
+            sendErrorResponse(w, http.StatusBadRequest, "Invalid genre_id")
+            return
+        }
+        genreID = &id
+    }
+    if bookStr := r.FormValue("book_id"); bookStr != "" {
+        id, err := strconv.Atoi(bookStr)
+        if err != nil {
+            sendErrorResponse(w, http.StatusBadRequest, "Invalid book_id")
+            return
+        }
+        bookID = &id
+    }
 
-	// Create post
-	post, err := uh.UserService.CreatePost(r.Context(), userID, content, imageURLs)
-	if err != nil {
-		sendErrorResponse(w, http.StatusInternalServerError, "Failed to create post: "+err.Error())
-		return
-	}
+    // Enforce 1-to-1 relationship: only one of genre_id or book_id can be non-null
+    if genreID != nil && bookID != nil {
+        sendErrorResponse(w, http.StatusBadRequest, "Post can only reference either a genre OR a book, not both")
+        return
+    }
 
-	// Send success response with the created post
-	sendSuccessResponse(w, map[string]interface{}{
-		"success": true,
-		"message": "Post created successfully!",
-		"post":    post,
-	})
+    // Get userID from context
+    userID, ok := r.Context().Value("user_id").(int)
+    if !ok {
+        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+        return
+    }
+
+    // Create post
+    post, err := uh.UserService.CreatePost(r.Context(), userID, content, imageURLs, genreID, bookID)
+    if err != nil {
+        sendErrorResponse(w, http.StatusInternalServerError, "Failed to create post: "+err.Error())
+        return
+    }
+
+    // Send success response with the created post
+    sendSuccessResponse(w, map[string]interface{}{
+        "success": true,
+        "message": "Post created successfully!",
+        "post":    post,
+    })
 }
 
 // GetAllPostsHandler returns all posts
@@ -1258,29 +1290,27 @@ func (uh *UserHandler) GetAllPostsHandler(w http.ResponseWriter, r *http.Request
 }
 
 // GetPostsByUserIDHandler returns posts for a specific user
+// handler/user_handler.go
 func (uh *UserHandler) GetPostsByUserIDHandler(w http.ResponseWriter, r *http.Request) {
+    userIDStr := chi.URLParam(r, "userID")
+    userID, err := strconv.Atoi(userIDStr) // Convert to int
+    log.Println("userID: ", userID)
+    if err != nil {
+        sendErrorResponse(w, http.StatusBadRequest, "Invalid user ID")
+        return
+    }
 
-	userIDStr := chi.URLParam(r, "userID")
+    posts, err := uh.UserService.GetPostsByUserID(r.Context(), userID)
+    if err != nil {
+        sendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch posts: "+err.Error())
+        return
+    }
 
-	userID, err := strconv.Atoi(userIDStr) // Convert to int
-	log.Println("userID: ", userID)
-	if err != nil {
-		sendErrorResponse(w, http.StatusBadRequest, "Invalid user ID")
-		return
-	}
-
-	posts, err := uh.UserService.GetPostsByUserID(r.Context(), userID)
-	if err != nil {
-		sendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch posts: "+err.Error())
-		return
-	}
-
-	sendSuccessResponse(w, map[string]interface{}{
-		"success": true,
-		"posts":   posts,
-	})
+    sendSuccessResponse(w, map[string]interface{}{
+        "success": true,
+        "posts":   posts,
+    })
 }
-
 // GetPostByPostIDHandler returns a single post by its ID
 func (uh *UserHandler) GetPostByPostIDHandler(w http.ResponseWriter, r *http.Request) {
 	postIDStr := r.URL.Query().Get("post_id") // Assume passed as query param

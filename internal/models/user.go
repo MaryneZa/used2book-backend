@@ -86,7 +86,7 @@ type OauthUser struct {
 	Email string `json:"email" db:"email"`
 }
 
-type UserAddLibraryForm struct {
+type UserAddListingForm struct {
 	BookID     int     `json:"book_id" db:"book_id"`
 	Status     string  `json:"status" db:"status"`
 	Price      float32 `json:"price" db:"price"`
@@ -98,7 +98,7 @@ type UserLibrary struct {
 	ID     int    `json:"id" db:"id"`           // ✅ Primary key (necessary)
 	UserID int    `json:"user_id" db:"user_id"` // ✅ Necessary (foreign key)
 	BookID int    `json:"book_id" db:"book_id"` // ✅ Necessary (foreign key)
-	Status string `json:"status" db:"status"`   // ✅ Necessary ('owned', 'not_own', 'wishlist')
+	ReadingStatus int `json:"reading_status" db:"reading_status"`   // ✅ Necessary (0,1)
 }
 
 type UserReview struct {

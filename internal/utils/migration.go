@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"log"
+    "log"
 )
 
 // RunMigrations executes a series of SQL statements to create tables and constraints.
@@ -16,7 +16,7 @@ func RunMigrations() {
 		`CREATE TABLE IF NOT EXISTS users (
             id INT AUTO_INCREMENT PRIMARY KEY,
             email VARCHAR(255) NOT NULL UNIQUE,
-
+            
             first_name VARCHAR(255) DEFAULT '',
             last_name VARCHAR(255) DEFAULT '',
 
@@ -57,6 +57,13 @@ func RunMigrations() {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         );`,
 
+        // genres table
+        `CREATE TABLE IF NOT EXISTS genres (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            );`,
 		// Create book_ratings table (stores calculated ratings)
 		`CREATE TABLE IF NOT EXISTS book_ratings (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -73,13 +80,23 @@ func RunMigrations() {
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,
             book_id INT NOT NULL,
-            status ENUM('owned','not_own','wishlist') NOT NULL,
+            reading_status TINYINT NOT NULL CHECK (reading_status IN (0, 1)), -- "Currently Reading" to 0 and "Finished Reading" to 1,
             personal_notes VARCHAR(255) DEFAULT '' ,
             favorite_quotes VARCHAR(255) DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (book_id) REFERENCES books(id)
+            FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+        );`,
+
+        `CREATE TABLE IF NOT EXISTS user_wishlist (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            book_id INT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
         );`,
 
 		`CREATE TABLE IF NOT EXISTS listings (
@@ -95,7 +112,7 @@ func RunMigrations() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (book_id) REFERENCES books(id)
+            FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
         );`,
 
 		`CREATE TABLE IF NOT EXISTS listing_images (
@@ -112,7 +129,7 @@ func RunMigrations() {
             listing_id INT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (listing_id) REFERENCES listings(id)
+            FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
         );`,
 
 		// Offers table
@@ -124,7 +141,7 @@ func RunMigrations() {
             status ENUM('pending','accepted','rejected', 'completed') DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (listing_id) REFERENCES listings(id),
+            FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE,
             FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE
         );`,
 
@@ -135,12 +152,12 @@ func RunMigrations() {
             seller_id INT NOT NULL,
             listing_id INT NOT NULL,
             transaction_amount DECIMAL(10,2) NOT NULL,
-            payment_status ENUM('pending', 'completed', 'failed', 'reserved', 'offer_accepted') DEFAULT 'pendings',
+            payment_status ENUM('pending', 'completed', 'failed', 'reserved', 'offer_accepted') DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (listing_id) REFERENCES listings(id)
+            FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
         );`,
 
 		// Book Reviews table
@@ -153,7 +170,7 @@ func RunMigrations() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (book_id) REFERENCES books(id)
+            FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
         );`,
 
 		// Posts table
@@ -161,10 +178,14 @@ func RunMigrations() {
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,
             content TEXT NOT NULL,
+            genre_id INT DEFAULT NULL,  -- Optional link to genres
+            book_id INT DEFAULT NULL,   -- Optional link to books
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            );`,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (genre_id) REFERENCES genres(id) ON DELETE SET NULL,
+            FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE SET NULL
+        );`,
 
 		`CREATE TABLE IF NOT EXISTS post_images (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -181,7 +202,7 @@ func RunMigrations() {
             content TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (post_id) REFERENCES posts(id),
+            FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );`,
 
@@ -205,31 +226,15 @@ func RunMigrations() {
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );`,
 
-		// genres table
-		`CREATE TABLE IF NOT EXISTS genres (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(255) NOT NULL UNIQUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            );`,
 
 		// Book genres table (Pivot)
 		`CREATE TABLE IF NOT EXISTS book_genres (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 book_id INT NOT NULL,
             genre_id INT NOT NULL,
-            FOREIGN KEY (book_id) REFERENCES books(id),
-            FOREIGN KEY (genre_id) REFERENCES genres(id)
+            FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+            FOREIGN KEY (genre_id) REFERENCES genres(id) ON DELETE CASCADE
         );`,
-
-		// Post genres table (Pivot)
-		`CREATE TABLE IF NOT EXISTS post_genres (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            post_id INT NOT NULL,
-            genre_id INT NOT NULL,
-            FOREIGN KEY (post_id) REFERENCES posts(id),
-            FOREIGN KEY (genre_id) REFERENCES genres(id)
-            );`,
 
 		`CREATE TABLE IF NOT EXISTS refresh_tokens (
 			id INT AUTO_INCREMENT PRIMARY KEY,
@@ -248,7 +253,7 @@ func RunMigrations() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (genre_id) REFERENCES genres(id)
+            FOREIGN KEY (genre_id) REFERENCES genres(id) ON DELETE CASCADE
         );`,
 		// // Seller Reviews table
 		// `CREATE TABLE IF NOT EXISTS seller_reviews (

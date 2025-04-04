@@ -10,9 +10,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/streadway/amqp"
 )
 
-func SetupRouter(db *sql.DB) http.Handler {
+func SetupRouter(db *sql.DB, rabbitConn *amqp.Connection) http.Handler {
 	config.InitOAuth()
 
 	r := chi.NewRouter()
@@ -38,7 +39,7 @@ func SetupRouter(db *sql.DB) http.Handler {
 	r.Mount("/user", routes.UserRoutes(db))
 	r.Mount("/book", routes.BookRoutes(db))
 	r.Mount("/auth-token", routes.TokenRoutes(db))
-	r.Mount("/payment", routes.PaymentRoutes(db))
+	r.Mount("/payment", routes.PaymentRoutes(db, rabbitConn))
 
 	// ✅ Debugging: Print all registered routes
 	fmt.Println("🔍 Registered Routes:")

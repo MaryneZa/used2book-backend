@@ -23,10 +23,14 @@ func BookRoutes(db *sql.DB) http.Handler {
 	userRepo := mysql.NewUserRepository(db)
 	userService := services.NewUserService(userRepo)
 
+	uploadService := services.NewUploadService(userRepo)
+
+
 	// Initialize Handlers
 	bookHandler := &handlers.BookHandler{
 		BookService: bookService,
 		UserService: userService,
+		UploadService:  uploadService,
 	}
 
 	r := chi.NewRouter()
@@ -60,6 +64,7 @@ func BookRoutes(db *sql.DB) http.Handler {
 
 	r.With(middleware.AuthMiddleware).Get("/recommended-books", bookHandler.GetRecommendedBooks)
 
+	r.With(middleware.AuthMiddleware).Post("/insert-book", bookHandler.InsertBookHandler)
 
 
 	return r

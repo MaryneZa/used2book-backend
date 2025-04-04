@@ -12,6 +12,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+
 	// "github.com/gorilla/mux"
 )
 
@@ -19,6 +20,8 @@ import (
 type BookHandler struct {
 	BookService *services.BookService
 	UserService *services.UserService
+	UploadService *services.UploadService
+
 }
 
 func (bh *BookHandler) GetAllBooks(w http.ResponseWriter, r *http.Request) {
@@ -384,5 +387,100 @@ func (bh *BookHandler) GetAllListingsByBookID(w http.ResponseWriter, r *http.Req
         "success":  true,
         "listings": listing,
     })
+}
+
+
+
+// InsertBookHandler handles book insertion with optional cover image upload
+func (bh *BookHandler) InsertBookHandler(w http.ResponseWriter, r *http.Request) {
+	// Parse multipart form (10MB max)
+	err := r.ParseMultipartForm(10 << 20)
+	if err != nil {
+		log.Println("Parse Form Error:", err)
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid form data")
+		return
+	}
+
+	// Get JSON data from form field 'data'
+	jsonData := r.FormValue("data")
+	var bookForm models.BookForm
+	if err := json.Unmarshal([]byte(jsonData), &bookForm); err != nil {
+		log.Println("JSON Decode Error:", err)
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid JSON format")
+		return
+	}
+
+	// Validate required fields
+	if bookForm.Title == "" || bookForm.Author == "" {
+		sendErrorResponse(w, http.StatusBadRequest, "Title and Author are required")
+		return
+	}
+	if len(bookForm.Genres) == 0 {
+		sendErrorResponse(w, http.StatusBadRequest, "At least one genre is required")
+		return
+	}
+
+	// Handle cover image upload (optional)
+	var coverImageURL string
+	files := r.MultipartForm.File["cover_image"]
+	if len(files) > 0 {
+		if len(files) > 1 {
+			sendErrorResponse(w, http.StatusBadRequest, "Only one cover image is allowed")
+			return
+		}
+		fileHandler := files[0]
+		file, err := fileHandler.Open()
+		if err != nil {
+			sendErrorResponse(w, http.StatusInternalServerError, "Error opening file")
+			return
+		}
+		defer file.Close()
+
+		coverImageURL, err = bh.UploadService.UploadImageURL(file, fileHandler.Filename)
+		if err != nil {
+			sendErrorResponse(w, http.StatusInternalServerError, "Image upload failed: "+err.Error())
+			return
+		}
+	}
+
+	// Create book model directly from bookForm (PublishDate is already time.Time)
+	book := models.Book{
+		Title:         bookForm.Title,
+		Author:        bookForm.Author,
+		Description:   bookForm.Description,
+		Language:      bookForm.Language,
+		ISBN:          bookForm.ISBN,
+		Publisher:     bookForm.Publisher,
+		PublishDate:   bookForm.PublishDate, // Use directly, no parsing needed
+		CoverImageURL: coverImageURL,
+	}
+
+	// Insert book into database
+	bookID, err := bh.BookService.InsertBook(r.Context(), book)
+	if err != nil {
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to insert book: "+err.Error())
+		return
+	}
+
+	// Insert or get genres and associate with book
+	for _, genreName := range bookForm.Genres {
+		genreID, err := bh.BookService.GetOrInsertGenre(r.Context(), genreName)
+		if err != nil {
+			sendErrorResponse(w, http.StatusInternalServerError, "Failed to process genre "+genreName+": "+err.Error())
+			return
+		}
+		err = bh.BookService.AssociateBookWithGenre(r.Context(), bookID, genreID)
+		if err != nil {
+			sendErrorResponse(w, http.StatusInternalServerError, "Failed to associate genre "+genreName+": "+err.Error())
+			return
+		}
+	}
+
+	// Success response
+	sendSuccessResponse(w, map[string]interface{}{
+		"success": true,
+		"message": "Book inserted successfully",
+		"book_id": bookID,
+	})
 }
 

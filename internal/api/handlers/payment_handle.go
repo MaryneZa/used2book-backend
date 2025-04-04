@@ -8,15 +8,18 @@ import (
 	"strings"
 	"used2book-backend/internal/services"
 	"used2book-backend/internal/models"
-
+	"fmt"
+	"time"
 
 	"github.com/omise/omise-go"
+	"github.com/streadway/amqp"
 )
 
 // PaymentHandler handles payment-related requests
 type PaymentHandler struct {
 	OmiseService *services.OmiseService
 	UserService  *services.UserService
+	RabbitMQConn *amqp.Connection
 }
 
 // ChargeRequest represents the JSON request body structure
@@ -30,160 +33,157 @@ type ChargeRequest struct {
 // handler/payment_handler.go
 // handler/payment_handler.go
 func (ph *PaymentHandler) ChargeHandler(w http.ResponseWriter, r *http.Request) {
-	var req ChargeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		sendErrorResponse(w, http.StatusBadRequest, "Invalid request format")
-		return
-	}
-	log.Println("BuyerID:", req.BuyerID, "ListingID:", req.ListingID, "OfferID:", req.OfferID)
+    var req ChargeRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        sendErrorResponse(w, http.StatusBadRequest, "Invalid request format")
+        return
+    }
+    log.Println("BuyerID:", req.BuyerID, "ListingID:", req.ListingID, "OfferID:", req.OfferID)
 
-	var amount float64
-	var listing *models.ListingDetails
-	var sellerID int
-	var offerID *int // Optional offerID for CreatePromptPayCharge
+    var amount float64
+    var listing *models.ListingDetails
+    var sellerID int
+    var offerID *int
 
-	if req.OfferID != 0 {
-		offer, err := ph.UserService.GetOfferByID(r.Context(), req.OfferID)
-		if err != nil {
-			sendErrorResponse(w, http.StatusNotFound, "Offer not found")
-			return
-		}
-		if offer.BuyerID != req.BuyerID {
-			sendErrorResponse(w, http.StatusForbidden, "You are not the buyer of this offer")
-			return
-		}
-		if offer.Status != "accepted" {
-			sendErrorResponse(w, http.StatusBadRequest, "Offer is not accepted")
-			return
-		}
-		amount = offer.OfferedPrice
-		listing, err = ph.UserService.GetListingByID(r.Context(), offer.ListingID)
-		if err != nil {
-			sendErrorResponse(w, http.StatusNotFound, "Listing not found")
-			return
-		}
-		// Reserve the listing for the offer buyer
-		success, err := ph.UserService.ReserveListingForOffer(r.Context(), offer.ListingID, offer.BuyerID)
-		if err != nil {
-			log.Println("❌ ReserveListingForOffer Error:", err)
-			sendErrorResponse(w, http.StatusInternalServerError, "Failed to reserve listing")
-			return
-		}
-		if !success {
-			isReserved, isExpired, err := ph.UserService.IsListingReserved(r.Context(), offer.ListingID)
-			if err != nil {
-				log.Println("❌ Error checking reservation status:", err)
-				sendErrorResponse(w, http.StatusInternalServerError, "Failed to check listing status")
-				return
-			}
-			if isReserved && !isExpired {
-				sendErrorResponse(w, http.StatusConflict, "This book is currently reserved by another buyer.")
-				return
-			} else if isReserved && isExpired {
-				if err := ph.UserService.ExpireReservedListing(r.Context(), offer.ListingID); err != nil {
-					log.Println("❌ ExpireReservedListing Error:", err)
-					sendErrorResponse(w, http.StatusInternalServerError, "Failed to process listing status")
-					return
-				}
-				success, err = ph.UserService.ReserveListingForOffer(r.Context(), offer.ListingID, offer.BuyerID)
-				if err != nil || !success {
-					sendErrorResponse(w, http.StatusConflict, "Book is no longer available")
-					return
-				}
-			} else {
-				sendErrorResponse(w, http.StatusConflict, "Book is not available for sale")
-				return
-			}
-		}
-		sellerID = offer.SellerID
-		tmpOfferID := req.OfferID
-		offerID = &tmpOfferID // Pass offerID for offer-based payment
-	} else {
-		listing, err := ph.UserService.GetListingByID(r.Context(), req.ListingID)
-		if err != nil {
-			sendErrorResponse(w, http.StatusNotFound, "Listing not found")
-			return
-		}
-		amount = float64(listing.Price)
-		sellerID = listing.SellerID
 
-		success, err := ph.UserService.ReserveListing(r.Context(), req.ListingID, 1)
-		if err != nil {
-			log.Println("❌ ReserveListing Error:", err)
-			sendErrorResponse(w, http.StatusInternalServerError, "Failed to process purchase")
-			return
-		}
-		if !success {
-			isReserved, isExpired, err := ph.UserService.IsListingReserved(r.Context(), req.ListingID)
-			if err != nil {
-				log.Println("❌ Error checking reservation status:", err)
-				sendErrorResponse(w, http.StatusInternalServerError, "Failed to check listing status")
-				return
-			}
-			if isReserved && !isExpired {
-				sendErrorResponse(w, http.StatusConflict, "This book is currently reserved by another buyer.")
-				return
-			} else if isReserved && isExpired {
-				if err := ph.UserService.ExpireReservedListing(r.Context(), req.ListingID); err != nil {
-					log.Println("❌ ExpireReservedListing Error:", err)
-					sendErrorResponse(w, http.StatusInternalServerError, "Failed to process listing status")
-					return
-				}
-				success, err = ph.UserService.ReserveListing(r.Context(), req.ListingID, 1)
-				if err != nil || !success {
-					sendErrorResponse(w, http.StatusConflict, "Book is no longer available")
-					return
-				}
-			} else {
-				sendErrorResponse(w, http.StatusConflict, "Book is not available for sale")
-					return
-			}
-		}
-		offerID = nil // No offerID for direct purchase
-	}
+	listing, err := ph.UserService.GetListingByID(r.Context(), req.ListingID)
+        if err != nil || listing == nil {
+            sendErrorResponse(w, http.StatusNotFound, "Listing not found")
+            return
+        }
+    if req.OfferID != 0 {
+        offer, err := ph.UserService.GetOfferByID(r.Context(), req.OfferID)
+        if err != nil {
+            sendErrorResponse(w, http.StatusNotFound, "Offer not found")
+            return
+        }
+        if offer.BuyerID != req.BuyerID {
+            sendErrorResponse(w, http.StatusForbidden, "You are not the buyer of this offer")
+            return
+        }
+        if offer.Status != "accepted" {
+            sendErrorResponse(w, http.StatusBadRequest, "Offer is not accepted")
+            return
+        }
+        amount = offer.OfferedPrice
+        // listing, err = ph.UserService.GetListingByID(r.Context(), offer.ListingID)
+        // if err != nil || listing == nil {
+        //     sendErrorResponse(w, http.StatusNotFound, "Listing not found")
+        //     return
+        // }
+        success, err := ph.UserService.ReserveListingForOffer(r.Context(), offer.ListingID, offer.BuyerID)
+        if err != nil || !success {
+            log.Println("❌ ReserveListingForOffer Error:", err)
+            sendErrorResponse(w, http.StatusInternalServerError, "Failed to reserve listing")
+            return
+        }
+        sellerID = offer.SellerID
+        tmpOfferID := req.OfferID
+        offerID = &tmpOfferID
+    } else {
+        // listing, err := ph.UserService.GetListingByID(r.Context(), req.ListingID)
+        // if err != nil || listing == nil {
+        //     sendErrorResponse(w, http.StatusNotFound, "Listing not found")
+        //     return
+        // }
+        log.Println("listing id :", listing.ListingID)
+        log.Println("listing omise:", listing.SellerOmiseID.String)
 
-	if !listing.SellerOmiseID.Valid {
-		_ = ph.UserService.ExpireReservedListing(r.Context(), req.ListingID)
-		sendErrorResponse(w, http.StatusBadRequest, "Seller does not have a valid Omise account")
-		return
-	}
-	sellerOmiseID := listing.SellerOmiseID.String
+        amount = float64(listing.Price)
+        sellerID = listing.SellerID
+        log.Println("listing id :", listing.ListingID)
 
-	charge, err := ph.OmiseService.CreatePromptPayCharge(int64(amount*100), req.ListingID, sellerOmiseID, req.BuyerID, 2, offerID)
-	if err != nil {
-		_ = ph.UserService.ExpireReservedListing(r.Context(), req.ListingID)
-		log.Println("❌ PromptPay Charge Error:", err)
-		sendErrorResponse(w, http.StatusInternalServerError, "Payment initiation failed")
-		return
-	}
+        success, err := ph.UserService.ReserveListing(r.Context(), req.ListingID, req.BuyerID)
+        if err != nil {
+            log.Println("❌ ReserveListing Error:", err)
+            sendErrorResponse(w, http.StatusInternalServerError, "Failed to process purchase")
+            return
+        }
+        if !success {
+            isReserved, isExpired, err := ph.UserService.IsListingReserved(r.Context(), req.ListingID)
+            if err != nil {
+                log.Println("❌ Error checking reservation status:", err)
+                sendErrorResponse(w, http.StatusInternalServerError, "Failed to check listing status")
+                return
+            }
+            if isReserved && !isExpired {
+                sendErrorResponse(w, http.StatusConflict, "This book is currently reserved by another buyer.")
+                return
+            } else if isReserved && isExpired {
+                if err := ph.UserService.ExpireReservedListing(r.Context(), req.ListingID); err != nil {
+                    log.Println("❌ ExpireReservedListing Error:", err)
+                    sendErrorResponse(w, http.StatusInternalServerError, "Failed to process listing status")
+                    return
+                }
+                success, err = ph.UserService.ReserveListing(r.Context(), req.ListingID, req.BuyerID)
+                if err != nil || !success {
+                    sendErrorResponse(w, http.StatusConflict, "Book is no longer available")
+                    return
+                }
+            } else {
+                sendErrorResponse(w, http.StatusConflict, "Book is not available for sale")
+                return
+            }
+        }
+        offerID = nil
 
-	transactionStatus := "reserved"
-	if req.OfferID != 0 {
-		transactionStatus = "offer_accepted"
-	}
-	err = ph.UserService.CreateTransaction(r.Context(), req.BuyerID, sellerID, req.ListingID, amount, transactionStatus)
-	if err != nil {
-		_ = ph.UserService.ExpireReservedListing(r.Context(), req.ListingID)
-		if strings.Contains(err.Error(), "Duplicate entry") {
-			sendErrorResponse(w, http.StatusConflict, "Transaction already initiated")
-			return
-		}
-		log.Println("❌ CreateTransaction Error:", err)
-		sendErrorResponse(w, http.StatusInternalServerError, "Failed to record transaction")
-		return
-	}
+        if listing == nil {
+            log.Println("❌ Listing became nil after reservation")
+            sendErrorResponse(w, http.StatusInternalServerError, "Internal server error: listing data missing")
+            return
+        }
+    }
 
-	response := map[string]interface{}{
-		"success":    true,
-		"charge_id":  charge.ID,
-		"qr_code":    charge.Source.ScannableCode.Image.DownloadURI,
-		"amount":     float64(charge.Amount) / 100,
-		"expires_at": charge.ExpiresAt,
-		"message":    "Scan this QR code within 2 minutes to pay.",
-	}
-	sendSuccessResponse(w, response)
+
+    if !listing.SellerOmiseID.Valid {
+        _ = ph.UserService.ExpireReservedListing(r.Context(), req.ListingID)
+        sendErrorResponse(w, http.StatusBadRequest, "Seller does not have a valid Omise account")
+        return
+    }
+    sellerOmiseID := listing.SellerOmiseID.String
+    log.Println("seller omise id:", sellerOmiseID)
+
+    charge, err := ph.OmiseService.CreatePromptPayCharge(int64(amount*100), req.ListingID, sellerOmiseID, req.BuyerID, 2, offerID)
+    if err != nil {
+        _ = ph.UserService.ExpireReservedListing(r.Context(), req.ListingID)
+        log.Println("❌ PromptPay Charge Error:", err)
+        sendErrorResponse(w, http.StatusInternalServerError, "Payment initiation failed")
+        return
+    }
+
+    if charge.Source == nil || charge.Source.ScannableCode == nil || charge.Source.ScannableCode.Image == nil {
+        _ = ph.UserService.ExpireReservedListing(r.Context(), req.ListingID)
+        log.Println("❌ Charge response missing QR code data")
+        sendErrorResponse(w, http.StatusInternalServerError, "Failed to generate QR code")
+        return
+    }
+
+    transactionStatus := "reserved"
+    if req.OfferID != 0 {
+        transactionStatus = "offer_accepted"
+    }
+    err = ph.UserService.CreateTransaction(r.Context(), req.BuyerID, sellerID, req.ListingID, amount, transactionStatus)
+    if err != nil {
+        _ = ph.UserService.ExpireReservedListing(r.Context(), req.ListingID)
+        if strings.Contains(err.Error(), "Duplicate entry") {
+            sendErrorResponse(w, http.StatusConflict, "Transaction already initiated")
+            return
+        }
+        log.Println("❌ CreateTransaction Error:", err)
+        sendErrorResponse(w, http.StatusInternalServerError, "Failed to record transaction")
+        return
+    }
+
+    response := map[string]interface{}{
+        "success":    true,
+        "charge_id":  charge.ID,
+        "qr_code":    charge.Source.ScannableCode.Image.DownloadURI,
+        "amount":     float64(charge.Amount) / 100,
+        "expires_at": charge.ExpiresAt,
+        "message":    "Scan this QR code within 2 minutes to pay.",
+    }
+    sendSuccessResponse(w, response)
 }
-
 // WebhookHandler processes Omise payment confirmations (included for completeness)
 func (ph *PaymentHandler) WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	var event struct {
@@ -197,6 +197,9 @@ func (ph *PaymentHandler) WebhookHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	if event.Key == "charge.complete" && event.Data.Paid {
+		log.Println("event.Key:", event.Key)
+		log.Println("event.Data.Paid:", event.Data.Paid)
+
 		listingID, ok := event.Data.Metadata["listing_id"].(float64)
 		if !ok {
 			log.Println("❌ Invalid listing_id in metadata")
@@ -226,6 +229,44 @@ func (ph *PaymentHandler) WebhookHandler(w http.ResponseWriter, r *http.Request)
 		}
 
 		log.Printf("Payment confirmed for listing %d by buyer %d", int(listingID), int(buyerID))
+
+		// Publish to RabbitMQ
+        ch, err := ph.RabbitMQConn.Channel()
+        if err != nil {
+            log.Println("❌ RabbitMQ Channel Error:", err)
+            return // Don’t fail webhook response
+        }
+        defer ch.Close()
+
+        q, err := ch.QueueDeclare(
+            "payment_queue", // New queue for payments
+            true, false, false, false, nil,
+        )
+        if err != nil {
+            log.Println("❌ Queue Declare Error:", err)
+            return
+        }
+
+        noti := map[string]interface{}{
+            "user_id":    int(buyerID),
+            "type":       "payment_success",
+            "message":    fmt.Sprintf("Payment succeeded!"),
+            "related_id": event.Data.ID, // charge_id
+            "created_at": time.Now(),
+        }
+        body, _ := json.Marshal(noti)
+        err = ch.Publish(
+            "", q.Name, false, false,
+            amqp.Publishing{
+                ContentType: "application/json",
+                Body:        body,
+            },
+        )
+        if err != nil {
+            log.Println("❌ Publish Error:", err)
+        }
+		
+
 	} else if event.Key == "charge.expired" {
 		listingID, ok := event.Data.Metadata["listing_id"].(float64)
 		if !ok {

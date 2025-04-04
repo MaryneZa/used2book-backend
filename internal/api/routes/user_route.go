@@ -41,18 +41,20 @@ func UserRoutes(db *sql.DB) http.Handler {
 
 	r.With(middleware.AuthMiddleware).Post("/add-library", userHandler.AddBookToLibraryHandler)
 
+	r.With(middleware.AuthMiddleware).Post("/add-listing", userHandler.AddBookToListingHandler)
+
+
 	r.With(middleware.AuthMiddleware).Get("/get-listing", userHandler.GetMyListingsHandler)
 	r.With(middleware.AuthMiddleware).Get("/get-library", userHandler.GetMyLibraryHandler)
 	r.With(middleware.AuthMiddleware).Get("/get-wishlist", userHandler.GetMyWishlist)
 
 	r.With(middleware.AuthMiddleware).Get("/get-listing/{userID:[0-9]+}", userHandler.GetUserListingsHandler)
 	r.With(middleware.AuthMiddleware).Get("/get-library/{userID:[0-9]+}", userHandler.GetUserLibraryHandler)
-	r.With(middleware.AuthMiddleware).Get("/get-wishlist/{userID:[0-9]+}", userHandler.GetUserWishlist)
+	r.Get("/get-wishlist/{userID:[0-9]+}", userHandler.GetUserWishlist)
 
 	r.With(middleware.AuthMiddleware).Post("/listing/remove/{listingID:[0-9]+}", userHandler.RemoveListingHandler)
 
 	r.Get("/user-info/{userID:[0-9]+}", userHandler.GetUserByIDHandler)
-	r.With(middleware.AuthMiddleware).Get("/user-wishlist/{userID:[0-9]+}", userHandler.GetUserWishlist)
 
 
 	r.With(middleware.AuthMiddleware).Get("/book-wishlist/{bookID:[0-9]+}", userHandler.AddBookToWishListHandler)
@@ -102,9 +104,13 @@ func UserRoutes(db *sql.DB) http.Handler {
 	r.With(middleware.AuthMiddleware).Get("/like-count/{postID:[0-9]+}", userHandler.GetLikeCountHandler) // e.g., /user/comments?post_id=1
 	r.With(middleware.AuthMiddleware).Get("/like-check/{postID:[0-9]+}", userHandler.IsPostLikedHandler) // e.g., /user/comments?post_id=1
 
+	r.With(middleware.AuthMiddleware).Get("/all", userHandler.GetAllUsersHandler) // e.g., /user/comments?post_id=1
+
 	// r.Get("/post", uh.GetPostByPostIDHandler) // e.g., /post?post_id=1
 
 	r.Get("/user-review", userHandler.GetAllUserReview)
+
+	// main.go or router.go
 
 
 

@@ -353,7 +353,7 @@ func (br *BookRepository) SyncBooksFromGoogleSheets(sheetID, apiKey string) erro
 	}
 
 	ctx := context.Background()
-	for i, row := range records[1:150] { // Skip header row
+	for i, row := range records[1:200] { // Skip header row
 		if len(row) < 18 {
 			log.Printf("⚠️ Skipping row %d: insufficient data\n", i+1)
 			continue

@@ -5,12 +5,16 @@ import (
 )
 
 
+
 type Post struct {
-    ID        int      `json:"id"`
-    UserID    int      `json:"user_id"`
-    Content   string   `json:"content"`
-    ImageURLs []string `json:"image_urls,omitempty"` // Populated from post_images
-    CreatedAt time.Time   `json:"created_at"`
+    ID        int       `json:"id"`
+    UserID    int       `json:"user_id"`
+    Content   string    `json:"content"`
+    GenreID   *int      `json:"genre_id,omitempty"`
+    BookID    *int      `json:"book_id,omitempty"`
+    ImageURLs []string  `json:"image_urls,omitempty"`
+    CreatedAt time.Time `json:"created_at"`
+    UpdatedAt time.Time `json:"updated_at,omitempty"`
 }
 
 type Comment struct {

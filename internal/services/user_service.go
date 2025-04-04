@@ -68,8 +68,16 @@ func (us *UserService) EditPreferrence(ctx context.Context, userID int, quote st
 }
 
 
-func (us *UserService) AddBookToLibrary(ctx context.Context, userID int, bookID int, own_status string, price float32, allow_offer bool, imageURLs []string, seller_note string)  (bool, error) {
-	return us.userRepo.AddBookToLibrary(ctx , userID, bookID, own_status, price, allow_offer, imageURLs, seller_note)
+func (us *UserService) AddBookToLibrary(ctx context.Context, userID int, bookID int, reading_status int)  (bool, error) {
+	return us.userRepo.AddBookToLibrary(ctx , userID, bookID, reading_status)
+}
+
+func (us *UserService) AddBookToWishlist(ctx context.Context, userID int, bookID int)  (bool, error) {
+	return us.userRepo.AddBookToWishlist(ctx , userID, bookID)
+}
+
+func (us *UserService) AddBookToListing(ctx context.Context, userID int, bookID int, price float32, allow_offer bool, imageURLs []string, seller_note string)  (bool, error) {
+	return us.userRepo.AddBookToListing(ctx , userID, bookID, price, allow_offer, imageURLs, seller_note)
 }
 
 func (us *UserService) CountUsers() (int, error) {
@@ -166,8 +174,8 @@ func (us *UserService) RejectOffer(ctx context.Context, sellerID int, offerID in
     return us.userRepo.RejectOffer(ctx, sellerID, offerID)
 }
 
-func (us *UserService) ReserveListing(ctx context.Context, listingID int, timeoutMinutes int) (bool, error) {
-	return us.userRepo.ReserveListing(ctx, listingID, timeoutMinutes)
+func (us *UserService) ReserveListing(ctx context.Context, listingID int, buyerID int) (bool, error) {
+	return us.userRepo.ReserveListing(ctx, listingID, buyerID)
 }
 
 // service/user_service.go
@@ -211,8 +219,9 @@ func (us *UserService) GetAllUserPreferred(ctx context.Context) ([]models.UserPr
 	return us.userRepo.GetAllUserPreferred(ctx)
 }
 
-func (us *UserService) CreatePost(ctx context.Context, userID int, content string, imageURLs []string) (models.Post, error) {
-	return us.userRepo.CreatePost(ctx, userID, content, imageURLs)
+// service/user_service.go
+func (us *UserService) CreatePost(ctx context.Context, userID int, content string, imageURLs []string, genreID *int, bookID *int) (models.Post, error) {
+    return us.userRepo.CreatePost(ctx, userID, content, imageURLs, genreID, bookID)
 }
 
 // GetAllPosts retrieves all posts

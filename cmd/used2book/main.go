@@ -12,6 +12,7 @@ import (
 	"used2book-backend/internal/utils"
 	"used2book-backend/internal/services"
 
+	"github.com/streadway/amqp"
 	
    
 )
@@ -41,7 +42,12 @@ func main() {
 	// Assign the shared Redis client to the twiliootp package.
 	twiliootp.RedisClient = utils.RedisClient
     
-	router := api.SetupRouter(db)
+	rabbitConn, err := amqp.Dial("amqp://guest:guest@localhost:5672")
+    if err != nil {
+        log.Fatal("Failed to connect to RabbitMQ:", err)
+    }
+
+	router := api.SetupRouter(db, rabbitConn)
 
 	utils.RunMigrations()
 

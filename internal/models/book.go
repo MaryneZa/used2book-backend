@@ -67,5 +67,18 @@ type BookGenre struct {
     GenreID int     `json:"genre_id"`
 }
 
+type BookForm struct {
+	Title       string    `json:"title"`
+	Author      string    `json:"author"`
+	Description string    `json:"description,omitempty"`
+	Language    string    `json:"language,omitempty"`
+	ISBN        string    `json:"isbn,omitempty"`
+	Publisher   string    `json:"publisher,omitempty"`
+	PublishDate time.Time `json:"publish_date,omitempty"` // Expecting "2025-03-19 03:19:39"
+	Genres      []string  `json:"genres"`                 // Array of genre names
+}
+
+
+
 
 

@@ -53,6 +53,18 @@ func (bs *BookService) SyncBooksFromGoogleSheets(sheetID, apiKey string) error {
 	return bs.bookRepo.SyncBooksFromGoogleSheets(sheetID, apiKey)
 }
 
+func (bs *BookService) InsertBook(ctx context.Context, book models.Book) (int, error) {
+	return bs.bookRepo.InsertBook(ctx, book)
+}
+
+func (bs *BookService) GetOrInsertGenre(ctx context.Context, genreName string) (int, error) {
+	return bs.bookRepo.GetOrInsertGenre(ctx, genreName)
+}
+
+func (bs *BookService) AssociateBookWithGenre(ctx context.Context, bookID, genreID int) error {
+	return bs.bookRepo.AssociateBookWithGenre(ctx, bookID, genreID)
+}
+
 func (bs *BookService) CountBooks() (int, error) {
 	return bs.bookRepo.CountBooks()
 }
