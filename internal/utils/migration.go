@@ -33,12 +33,22 @@ func RunMigrations() {
             quote VARCHAR(100) DEFAULT '',
             bio VARCHAR(500) DEFAULT '',
 
-            omise_account_id VARCHAR(255) DEFAULT NULL, 
-
             role ENUM('user','admin') DEFAULT 'user',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         );`,
+
+        `CREATE TABLE IF NOT EXISTS bank_accounts (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            bank_name VARCHAR(100) NOT NULL,
+            account_number VARCHAR(50) NOT NULL,
+            account_holder_name VARCHAR(100) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );`,
+        
 
 		// provider_id VARCHAR(255),
 
@@ -107,7 +117,6 @@ func RunMigrations() {
             status ENUM('for_sale', 'reserved', 'sold', 'removed') DEFAULT 'for_sale',
             reserved_expires_at TIMESTAMP NULL DEFAULT NULL,
             allow_offers BOOLEAN DEFAULT FALSE,
-            seller_omise_id VARCHAR(255) DEFAULT NULL,
             seller_note TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -148,16 +157,18 @@ func RunMigrations() {
 		// Transactions table
 		`CREATE TABLE IF NOT EXISTS transactions (
             id INT AUTO_INCREMENT PRIMARY KEY,
-            buyer_id INT NOT NULL,
-            seller_id INT NOT NULL,
-            listing_id INT NOT NULL,
+            stripe_session_id VARCHAR(255) DEFAULT NULL, -- for Stripe tracking
+            buyer_id INT,
+            listing_id INT,
+            offer_id INT DEFAULT NULL,
             transaction_amount DECIMAL(10,2) NOT NULL,
-            payment_status ENUM('pending', 'completed', 'failed', 'reserved', 'offer_accepted') DEFAULT 'pending',
+            payment_status ENUM('pending', 'completed', 'failed')DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE CASCADE
+            FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE SET NULL,
+            FOREIGN KEY (listing_id) REFERENCES listings(id) ON DELETE SET NULL,
+            FOREIGN KEY (offer_id) REFERENCES listings(id) ON DELETE SET NULL
+
         );`,
 
 		// Book Reviews table

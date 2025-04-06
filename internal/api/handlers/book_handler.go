@@ -352,10 +352,6 @@ func (bh *BookHandler) GetBookCount(w http.ResponseWriter, r *http.Request) {
 
 
 func (bh *BookHandler) GetAllListingsByBookID(w http.ResponseWriter, r *http.Request) {
-    // Extract user ID from context
-
-	body, _ := io.ReadAll(r.Body)
-	log.Println("Request Body:", string(body)) 
 
     userID, ok := r.Context().Value("user_id").(int)
     if !ok {

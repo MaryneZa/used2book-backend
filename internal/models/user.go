@@ -15,13 +15,22 @@ type User struct {
 	FirstName         string         `json:"first_name,omitempty" db:"first_name"`
 	LastName          string         `json:"last_name,omitempty" db:"last_name"`
 	PhoneNumber       sql.NullString `json:"phone_number" db:"phone_number"`
-	OmiseAccountID    sql.NullString `json:"omise_account_id" db:"omise_account_id"` // ✅ Added Omise account ID
 	Quote             string         `json:"quote" db:"quote"`
 	Bio               string         `json:"bio" db:"bio"`
 	Gender            string         `json:"gender" db:"gender"`
 	Role              string         `json:"role,omitempty" db:"role"`
 	CreatedAt         time.Time      `json:"created_at" db:"created_at"`
 	UpdatedAt         time.Time      `json:"updated_at" db:"updated_at"`
+}
+
+type BankAccount struct {
+	ID                int
+	UserID            int
+	BankName          string
+	AccountNumber     string
+	AccountHolderName string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 // User represents a user in the system.
@@ -38,8 +47,7 @@ type GetMe struct {
 	Quote             string         `json:"quote" db:"quote"`
 	Bio               string         `json:"bio" db:"bio"`
 	Role              string         `json:"role,omitempty" db:"role"`
-	OmiseAccountID    sql.NullString `json:"omise_account_id" db:"omise_account_id"` // ✅ Added Omise account ID
-
+	HasBankAccount    bool    `json:"has_bank_account"` // ✅ just a boolean
 }
 
 type GetAllUsers struct {
@@ -116,7 +124,6 @@ type UserListing struct {
 	Status        string         `json:"status" db:"status"`
 	Price         float32        `json:"price" db:"price"`
 	AllowOffer    bool           `json:"allow_offers" db:"allow_offers"`
-	SellerOmiseID sql.NullString `json:"seller_omise_id" db:"seller_omise_id"` // ✅ Added Omise ID
 	ImageURLs     []string  `json:"image_urls"`
 }
 

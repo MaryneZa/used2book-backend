@@ -14,6 +14,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/omise/omise-go v1.5.0
 	github.com/streadway/amqp v1.1.0
+	github.com/stripe/stripe-go/v76 v76.25.0
 	github.com/twilio/twilio-go v1.23.12
 	golang.org/x/crypto v0.32.0
 	golang.org/x/oauth2 v0.25.0

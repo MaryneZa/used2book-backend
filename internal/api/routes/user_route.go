@@ -31,6 +31,9 @@ func UserRoutes(db *sql.DB) http.Handler {
 
 
 	r.With(middleware.AuthMiddleware).Get("/me", userHandler.GetMeHandler)
+
+	r.With(middleware.AuthMiddleware).Post("/create-bank-account", userHandler.CreateBankAccountHandler)
+
 	
 	r.With(middleware.AuthMiddleware).Post("/upload-profile-image", userHandler.UploadProfileImageHandler)
 	r.With(middleware.AuthMiddleware).Post("/upload-background-image", userHandler.UploadBackgroundImageHandler)

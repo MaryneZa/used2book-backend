@@ -1,7 +1,6 @@
 package models
 
 import (
-	"database/sql"
 	"time"
 )
 
@@ -25,7 +24,6 @@ type CartItem struct {
 type ListingDetails struct {
 	ListingID     int            `json:"listing_id"`
 	SellerID      int            `json:"seller_id"`
-	SellerOmiseID sql.NullString `json:"seller_omise_id" db:"seller_omise_id"` // ✅ Seller's Omise ID
 	BookID        int            `json:"book_id"`
 	Price         float32        `json:"price"`
 	Status        string         `json:"status"`
@@ -61,4 +59,6 @@ type OfferItem struct {
     BuyerFirstName string  `json:"buyer_first_name"` // New
     BuyerLastName  string  `json:"buyer_last_name"`  // New
     BuyerPicture   string  `json:"buyer_picture_profile"` // New
+	InitialPrice   string  `json:"initial_price"`
+	Avaibility     string  `json:"avaibility"`
 }

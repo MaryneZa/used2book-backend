@@ -78,6 +78,28 @@ func (ur *UserRepository) FindByEmail(ctx context.Context, email string) (*model
 	}
 	return &user, nil
 }
+
+func (ur *UserRepository) CreateBankAccount(ctx context.Context, bank *models.BankAccount) (int, error) {
+	query := `
+		INSERT INTO bank_accounts (user_id, bank_name, account_number, account_holder_name, created_at, updated_at)
+		VALUES (?, ?, ?, ?, NOW(), NOW())
+	`
+
+	result, err := ur.db.ExecContext(ctx, query, bank.UserID, bank.BankName, bank.AccountNumber, bank.AccountHolderName)
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	log.Println("✅ Bank account created with ID:", id)
+	return int(id), nil
+}
+
+
 func (ur *UserRepository) GetGender(ctx context.Context, userID int) (string, error) {
 	var gender string
 	query := "SELECT gender FROM users WHERE id = ?"
@@ -253,7 +275,7 @@ func (ur *UserRepository) FindByID(ctx context.Context, userID int) (*models.Get
 
 	query := `
 	SELECT id, email, first_name, last_name, picture_profile, picture_background, 
-	phone_number, quote, bio, role, omise_account_id, gender
+	phone_number, quote, bio, role, gender
 	FROM users 
 	WHERE id = ?
 	`
@@ -269,7 +291,6 @@ func (ur *UserRepository) FindByID(ctx context.Context, userID int) (*models.Get
 		&getMe.Quote,
 		&getMe.Bio,
 		&getMe.Role,
-		&getMe.OmiseAccountID,
 		&getMe.Gender,
 	)
 	if err != nil {
@@ -282,8 +303,21 @@ func (ur *UserRepository) FindByID(ctx context.Context, userID int) (*models.Get
 	if err != nil {
 		return nil, err
 	}
+
+	var bankID int
+	err = ur.db.QueryRowContext(ctx, "SELECT id FROM bank_accounts WHERE user_id = ? LIMIT 1", userID).Scan(&bankID)
+	if err == sql.ErrNoRows {
+		getMe.HasBankAccount = false
+	} else if err != nil {
+		return nil, err
+	} else {
+		getMe.HasBankAccount = true
+	}
+	
 	return &getMe, nil
 }
+
+
 
 func (ur *UserRepository) GetUserPreferredGenres(ctx context.Context, userID int) ([]models.Genre, error) {
 	query := `
@@ -747,8 +781,7 @@ func (ur *UserRepository) GetListingByID(ctx context.Context, listingID int) (*m
             b.title, b.author, b.description, b.language, b.isbn, b.publisher, 
             b.publish_date, b.cover_image_url, 
             COALESCE(br.average_rating, 0) AS average_rating, 
-            COALESCE(br.num_ratings, 0) AS num_ratings,
-            u.omise_account_id
+            COALESCE(br.num_ratings, 0) AS num_ratings
         FROM listings l
         JOIN books b ON l.book_id = b.id
         LEFT JOIN book_ratings br ON b.id = br.book_id
@@ -764,8 +797,7 @@ func (ur *UserRepository) GetListingByID(ctx context.Context, listingID int) (*m
 		&listing.Title, &listing.Author, &listing.Description,
 		&listing.Language, &listing.ISBN, &listing.Publisher,
 		&listing.PublishDate, &listing.CoverImageURL,
-		&listing.AverageRating, &listing.NumRatings,
-		&listing.SellerOmiseID, // Fetch seller's Omise account ID
+		&listing.AverageRating, &listing.NumRatings, // Fetch seller's Omise account ID
 	)
 
 	if err != nil {
@@ -871,7 +903,7 @@ func (ur *UserRepository) GetCart(ctx context.Context, userID int) ([]models.Car
         FROM cart c
         JOIN listings l ON c.listing_id = l.id
         JOIN books b ON l.book_id = b.id
-        WHERE c.user_id = ? AND l.status IN ('for_sale', 'sold')  -- Updated to include 'for_sale' and 'sold'
+        WHERE c.user_id = ? AND l.status IN ('for_sale', 'sold', 'reserved')  -- Updated to include 'for_sale' and 'sold'
     `
 
 	rows, err := ur.db.QueryContext(ctx, query, userID)
@@ -1006,7 +1038,9 @@ func (ur *UserRepository) GetBuyerOffers(ctx context.Context, buyerID int) ([]mo
              WHERE li.listing_id = l.id 
              ORDER BY li.id ASC 
              LIMIT 1) AS image_url,
-            l.seller_id
+            l.seller_id,
+			l.price AS initial_price,
+			l.status AS avaibility
         FROM offers o
         JOIN listings l ON o.listing_id = l.id
         JOIN books b ON l.book_id = b.id
@@ -1033,6 +1067,9 @@ func (ur *UserRepository) GetBuyerOffers(ctx context.Context, buyerID int) ([]mo
 			&item.CoverImageURL,
 			&item.ImageURL,
 			&item.SellerID,
+			&item.InitialPrice,
+			&item.Avaibility,
+
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning offer item: %w", err)
@@ -1068,7 +1105,8 @@ func (ur *UserRepository) GetSellerOffers(ctx context.Context, sellerID int) ([]
             l.seller_id,
             u.first_name AS buyer_first_name,
             u.last_name AS buyer_last_name,
-            u.picture_profile AS buyer_picture_profile
+            u.picture_profile AS buyer_picture_profile,
+			l.price AS initial_price
         FROM offers o
         JOIN listings l ON o.listing_id = l.id
         JOIN books b ON l.book_id = b.id
@@ -1099,6 +1137,7 @@ func (ur *UserRepository) GetSellerOffers(ctx context.Context, sellerID int) ([]
 			&item.BuyerFirstName,
 			&item.BuyerLastName,
 			&item.BuyerPicture,
+			&item.InitialPrice,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning seller offer item: %w", err)
@@ -1391,7 +1430,7 @@ func (ur *UserRepository) ReserveListing(ctx context.Context, listingID int, buy
 // MarkListingAsSold updates the listing status to sold
 // repository/user_repository.go
 // repository/user_repository.go
-func (ur *UserRepository) MarkListingAsSold(ctx context.Context, listingID, buyerID int, amount float64) error {
+func (ur *UserRepository) MarkListingAsSold(ctx context.Context, listingID, buyerID int) error {
 	tx, err := ur.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to start transaction: %w", err)
@@ -1435,25 +1474,25 @@ func (ur *UserRepository) MarkListingAsSold(ctx context.Context, listingID, buye
 		return fmt.Errorf("failed to reject other offers: %w", err)
 	}
 
-	// Optional: Update the winning offer to 'completed' if it’s an offer payment
-	queryWinningOffer := `
-        UPDATE offers 
-        SET status = 'completed',
-            updated_at = NOW()
-        WHERE listing_id = ?
-        AND buyer_id = ?
-        AND status = 'accepted'
-    `
-	result, err = tx.ExecContext(ctx, queryWinningOffer, listingID, buyerID)
-	if err != nil {
-		return fmt.Errorf("failed to update winning offer: %w", err)
-	}
+	// // Optional: Update the winning offer to 'completed' if it’s an offer payment
+	// queryWinningOffer := `
+    //     UPDATE offers 
+    //     SET status = 'completed',
+    //         updated_at = NOW()
+    //     WHERE listing_id = ?
+    //     AND buyer_id = ?
+    //     AND status = 'accepted'
+    // `
+	// _, err = tx.ExecContext(ctx, queryWinningOffer, listingID, buyerID)
+	// if err != nil {
+	// 	return fmt.Errorf("failed to update winning offer: %w", err)
+	// }
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	log.Printf("Listing %d marked as sold for buyer %d, amount %.2f; offers updated", listingID, buyerID, amount)
+	log.Printf("Listing %d marked as sold for buyer %d, offers updated", listingID, buyerID)
 	return nil
 }
 
@@ -1487,10 +1526,28 @@ func (ur *UserRepository) ExpireReservedListing(ctx context.Context, listingID i
 }
 
 // CreateTransaction records a new transaction
-func (ur *UserRepository) CreateTransaction(ctx context.Context, buyerID, sellerID, listingID int, amount float64, status string) error {
-	query := `INSERT INTO transactions (buyer_id, seller_id, listing_id, transaction_amount, payment_status, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, NOW(), NOW())`
-	_, err := ur.db.ExecContext(ctx, query, buyerID, sellerID, listingID, amount, status)
+func (ur *UserRepository) CreateTransaction(ctx context.Context, stripe_session_id string, buyerID int, listingID int, offer_id *int, amount float64, status string) error {
+
+	query := `INSERT INTO transactions (stripe_session_id, buyer_id, listing_id, offer_id, transaction_amount, payment_status, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())`
+	
+	var offerValue interface{}
+	if offer_id != nil {
+		offerValue = *offer_id
+	} else {
+		offerValue = nil
+	}
+
+	_, err := ur.db.ExecContext(ctx, query,
+		stripe_session_id,
+		buyerID,
+		listingID,
+		offerValue,
+		amount,
+		status,
+	)
+
+
 	return err
 }
 
@@ -1502,12 +1559,7 @@ func (ur *UserRepository) UpdateTransactionStatus(ctx context.Context, listingID
 	return err
 }
 
-// UpdateOmiseAccountID updates the user's Omise account ID
-func (ur *UserRepository) UpdateOmiseAccountID(ctx context.Context, userID int, recipientID string) error {
-	query := `UPDATE users SET omise_account_id = ?, updated_at = NOW() WHERE id = ?`
-	_, err := ur.db.ExecContext(ctx, query, recipientID, userID)
-	return err
-}
+
 
 // CleanupExpiredListings runs as a background job
 // repository/user_repository.go

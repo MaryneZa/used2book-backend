@@ -24,9 +24,6 @@ func (us *UserService) GetUserByID(ctx context.Context, userID int) (*models.Get
 	return us.userRepo.FindByID(ctx, userID)
 }
 
-func (us * UserService) UpdateOmiseAccountID(ctx context.Context, userID int, omiseAccountID string) error {
-	return us.userRepo.UpdateOmiseAccountID(ctx, userID, omiseAccountID)
-}
 
 func (us *UserService) SetUserPreferredGenres(ctx context.Context, userID int, genreIDs []int) error {
 	return us.userRepo.AddUserPreferredGenres(ctx, userID, genreIDs)
@@ -36,6 +33,9 @@ func (us *UserService) GetUserPreferences(ctx context.Context, userID int) ([]mo
 	return us.userRepo.GetUserPreferredGenres(ctx, userID)
 }
 
+func (us *UserService) CreateBankAccount(ctx context.Context, bank *models.BankAccount) (int, error) {
+	return us.userRepo.CreateBankAccount(ctx, bank)
+}
 
 func (us *UserService) GetMe(ctx context.Context, userID int) (*models.GetMe, error) {
 
@@ -126,8 +126,8 @@ func (us *UserService) RemoveListing(ctx context.Context, userID int, listingID 
     return us.userRepo.RemoveListing(ctx, userID, listingID)
 }
 
-func (us *UserService) MarkListingAsSold(ctx context.Context, listingID int, buyerID int, amount float64) error {
-	return us.userRepo.MarkListingAsSold(ctx, listingID, buyerID, amount)
+func (us *UserService) MarkListingAsSold(ctx context.Context, listingID int, buyerID int) error {
+	return us.userRepo.MarkListingAsSold(ctx, listingID, buyerID)
 }
 
 func (us *UserService) UpdateGender(ctx context.Context, userID int, gender string) error {
@@ -199,8 +199,9 @@ func (us *UserService) ExpireReservedListing(ctx context.Context, listingID int)
 func (us *UserService) RevertOfferReservation(ctx context.Context, listingID int, offerID int) error {
     return us.userRepo.RevertOfferReservation(ctx, listingID, offerID)
 }
-func (us *UserService) CreateTransaction(ctx context.Context, buyerID, sellerID, listingID int, amount float64, status string) error {
-	return us.userRepo.CreateTransaction(ctx, buyerID, sellerID, listingID, amount, status)
+
+func (us *UserService) CreateTransaction(ctx context.Context, stripe_session_id string, buyerID int, listingID int, offer_id *int, amount float64, status string) error {
+	return us.userRepo.CreateTransaction(ctx, stripe_session_id, buyerID, listingID, offer_id, amount, status)
 }
 
 func (us *UserService) UpdateTransactionStatus(ctx context.Context, listingID int, status string) error {
