@@ -14,6 +14,7 @@ type User struct {
 	BackgroundPicture string         `json:"picture_background" db:"picture_background"`
 	FirstName         string         `json:"first_name,omitempty" db:"first_name"`
 	LastName          string         `json:"last_name,omitempty" db:"last_name"`
+	Address          string         `json:"address,omitempty" db:"address"`
 	PhoneNumber       sql.NullString `json:"phone_number" db:"phone_number"`
 	Quote             string         `json:"quote" db:"quote"`
 	Bio               string         `json:"bio" db:"bio"`
@@ -48,7 +49,17 @@ type GetMe struct {
 	Bio               string         `json:"bio" db:"bio"`
 	Role              string         `json:"role,omitempty" db:"role"`
 	HasBankAccount    bool    `json:"has_bank_account"` // ✅ just a boolean
+	Address          string         `json:"address,omitempty" db:"address"`
 }
+
+type WishlistUser struct {
+	UserID    int    `json:"id"`
+	Email     string `json:"email"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+	ProfilePicture  string `json:"picture_profile" db:"picture_profile"`
+}
+
 
 type GetAllUsers struct {
 	ID                int            `json:"id" db:"id"`

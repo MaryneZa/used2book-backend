@@ -321,7 +321,7 @@ func (uh *UserHandler) EditUserNameHandler(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-func (uh *UserHandler) EditPreferrenceHandler(w http.ResponseWriter, r *http.Request) {
+func (uh *UserHandler) EditProfileHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 1. Parse JSON body for email, password, name, etc.
 	var user models.User
@@ -333,10 +333,15 @@ func (uh *UserHandler) EditPreferrenceHandler(w http.ResponseWriter, r *http.Req
 
 	userID := r.Context().Value("user_id").(int)
 
-	user.Provider = "local"
+	log.Println("first name:", user.FirstName)
+	log.Println("last name:", user.LastName)
+	log.Println("address:", user.Address)
+	log.Println("quote:", user.Quote)
+	log.Println("bio:", user.Bio)
+
 
 	// 2. Check if user with same email already exists
-	err := uh.UserService.EditPreferrence(r.Context(), userID, user.Quote, user.Bio)
+	err := uh.UserService.EditProfile(r.Context(), userID, user.FirstName, user.LastName, user.Address, user.Quote, user.Bio)
 	if err != nil {
 		sendErrorResponse(w, http.StatusConflict, "Edit Preferrence "+err.Error()) // 409 Conflict if user exists
 		return
@@ -490,6 +495,58 @@ func (uh *UserHandler) GetUserCount(w http.ResponseWriter, r *http.Request) {
 	})
 
 }
+
+func (uh *UserHandler) GetMyPurchasedListingsHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(int)
+
+	listing, err := uh.UserService.GetPurchasedListingsByUserID(r.Context(), userID)
+	if err != nil {
+		// Handle the error, e.g., return a 500 Internal Server Error
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to get my purchase listing: "+err.Error()) // 409 Conflict if user exists
+		return
+	}
+
+	sendSuccessResponse(w, map[string]interface{}{
+		"listing": listing,
+	})
+
+}
+
+func (uh *UserHandler) GetMyOrdersHandler(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(int)
+
+	orders, err := uh.UserService.GetMyOrders(r.Context(), userID)
+	if err != nil {
+		// Handle the error, e.g., return a 500 Internal Server Error
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to get my purchase listing: "+err.Error()) // 409 Conflict if user exists
+		return
+	}
+
+	sendSuccessResponse(w, map[string]interface{}{
+		"orders": orders,
+	})
+
+}
+func (uh *UserHandler) GetUsersByWishlistBookIDHandler(w http.ResponseWriter, r *http.Request) {
+	bookIDStr := chi.URLParam(r, "bookID")
+	bookID, err := strconv.Atoi(bookIDStr)
+	if err != nil {
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid book ID")
+		return
+	}
+
+	users, err := uh.UserService.GetUsersByBookInWishlist(r.Context(), bookID)
+	if err != nil {
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch wishlist users")
+		return
+	}
+
+	sendSuccessResponse(w, map[string]interface{}{
+		"users": users,
+	})
+}
+
+
 
 func (uh *UserHandler) GetAllListingsHandler(w http.ResponseWriter, r *http.Request) {
 

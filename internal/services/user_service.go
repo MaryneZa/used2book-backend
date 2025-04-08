@@ -63,8 +63,8 @@ func (us *UserService) EditName(ctx context.Context, userID int, firstName strin
 	return us.userRepo.EditName(ctx, userID, firstName, lastName)
 }
 
-func (us *UserService) EditPreferrence(ctx context.Context, userID int, quote string, bio string)  error {
-	return us.userRepo.EditPreferrence(ctx, userID, quote, bio)
+func (us *UserService) EditProfile(ctx context.Context, userID int, first_name string, last_name string, address string, quote string, bio string) error {
+	return us.userRepo.EditProfile(ctx, userID, first_name, last_name, address, quote, bio)
 }
 
 
@@ -91,6 +91,19 @@ func (us *UserService) GetUserLibrary(ctx context.Context, userID int) ([]models
 func (us *UserService) GetAllListings(ctx context.Context) ([]models.UserListing, error){
 	return us.userRepo.GetAllListings(ctx)
 }
+
+func (us *UserService) GetPurchasedListingsByUserID(ctx context.Context, userID int) ([]models.MyPurchase, error) {
+	return us.userRepo.GetPurchasedListingsByUserID(ctx, userID)
+}
+
+func (us *UserService) GetMyOrders(ctx context.Context, sellerID int) ([]models.MyOrder, error) {
+	return us.userRepo.GetMyOrders(ctx, sellerID)
+}
+
+func (us *UserService) GetUsersByBookInWishlist(ctx context.Context, bookID int) ([]models.WishlistUser, error) {
+	return us.userRepo.GetUsersByBookInWishlist(ctx, bookID)
+}
+
 
 func (us *UserService) GetAllListingsByBookID(ctx context.Context, userID int, bookID int) ([]models.UserListing, error){
 	return us.userRepo.GetAllListingsByBookID(ctx, userID, bookID)

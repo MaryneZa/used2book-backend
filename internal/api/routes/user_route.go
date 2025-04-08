@@ -40,7 +40,7 @@ func UserRoutes(db *sql.DB) http.Handler {
 
 	r.With(middleware.AuthMiddleware).Post("/edit-account-info", userHandler.EditAccountInfoHandler)
 	r.With(middleware.AuthMiddleware).Post("/edit-username", userHandler.EditUserNameHandler)
-	r.With(middleware.AuthMiddleware).Post("/edit-preferrence", userHandler.EditPreferrenceHandler)
+	r.With(middleware.AuthMiddleware).Post("/edit-profile", userHandler.EditProfileHandler)
 
 	r.With(middleware.AuthMiddleware).Post("/add-library", userHandler.AddBookToLibraryHandler)
 
@@ -101,13 +101,21 @@ func UserRoutes(db *sql.DB) http.Handler {
 	r.With(middleware.AuthMiddleware).Get("/user-posts/{userID:[0-9]+}", userHandler.GetPostsByUserIDHandler)
 
 	r.With(middleware.AuthMiddleware).Post("/comment-create", userHandler.CreateCommentHandler)
-	r.With(middleware.AuthMiddleware).Get("/comments/{postID:[0-9]+}", userHandler.GetCommentsByPostIDHandler) // e.g., /user/comments?post_id=1
+	r.With(middleware.AuthMiddleware).Get("/comments/{postID:[0-9]+}", userHandler.GetCommentsByPostIDHandler) 
 
 	r.With(middleware.AuthMiddleware).Post("/like-toggle/{postID:[0-9]+}", userHandler.ToggleLikeHandler)
-	r.With(middleware.AuthMiddleware).Get("/like-count/{postID:[0-9]+}", userHandler.GetLikeCountHandler) // e.g., /user/comments?post_id=1
-	r.With(middleware.AuthMiddleware).Get("/like-check/{postID:[0-9]+}", userHandler.IsPostLikedHandler) // e.g., /user/comments?post_id=1
+	r.With(middleware.AuthMiddleware).Get("/like-count/{postID:[0-9]+}", userHandler.GetLikeCountHandler) 
+	r.With(middleware.AuthMiddleware).Get("/like-check/{postID:[0-9]+}", userHandler.IsPostLikedHandler) 
 
-	r.With(middleware.AuthMiddleware).Get("/all", userHandler.GetAllUsersHandler) // e.g., /user/comments?post_id=1
+	r.With(middleware.AuthMiddleware).Get("/all", userHandler.GetAllUsersHandler) 
+
+	r.With(middleware.AuthMiddleware).Get("/purchase-listing", userHandler.GetMyPurchasedListingsHandler) 
+
+	r.With(middleware.AuthMiddleware).Get("/my-orders", userHandler.GetMyOrdersHandler)
+	
+	r.With(middleware.AuthMiddleware).Get("/user-wishlist/{bookID:[0-9]+}", userHandler.GetUsersByWishlistBookIDHandler) 
+	
+
 
 	// r.Get("/post", uh.GetPostByPostIDHandler) // e.g., /post?post_id=1
 

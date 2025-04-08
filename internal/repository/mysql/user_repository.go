@@ -275,7 +275,7 @@ func (ur *UserRepository) FindByID(ctx context.Context, userID int) (*models.Get
 
 	query := `
 	SELECT id, email, first_name, last_name, picture_profile, picture_background, 
-	phone_number, quote, bio, role, gender
+	phone_number, quote, bio, role, gender, address
 	FROM users 
 	WHERE id = ?
 	`
@@ -292,6 +292,7 @@ func (ur *UserRepository) FindByID(ctx context.Context, userID int) (*models.Get
 		&getMe.Bio,
 		&getMe.Role,
 		&getMe.Gender,
+		&getMe.Address,
 	)
 	if err != nil {
 		return nil, err
@@ -533,16 +534,19 @@ func (ur *UserRepository) EditName(ctx context.Context, userID int, firstName st
 	return nil
 }
 
-func (ur *UserRepository) EditPreferrence(ctx context.Context, userID int, quote string, bio string) error {
+func (ur *UserRepository) EditProfile(ctx context.Context, userID int, first_name string, last_name string, address string, quote string, bio string) error {
 	query := `
 		UPDATE users
-		SET 
+		SET
+		first_name = COALESCE(?, first_name),
+		last_name = COALESCE(?, last_name),
+		address = COALESCE(?, address),
 		quote = COALESCE(?, quote), 
 		bio = COALESCE(?, bio),
 		updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 		`
-	_, err := ur.db.ExecContext(ctx, query, quote, bio, userID)
+	_, err := ur.db.ExecContext(ctx, query, first_name, last_name, address, quote, bio, userID)
 	if err != nil {
 		return err
 	}
@@ -700,6 +704,153 @@ func (ur *UserRepository) GetMyListings(ctx context.Context, userID int) ([]mode
 	log.Println("Fetched listings for marketplace (excluding user:", userID, ")")
 	return listings, nil
 }
+
+func (ur *UserRepository) GetPurchasedListingsByUserID(ctx context.Context, userID int) ([]models.MyPurchase, error) {
+	query := `
+		SELECT 
+			l.id AS listing_id,
+			l.book_id,
+			l.seller_id,
+			l.price,
+			b.title AS book_title,
+			u.first_name,
+			u.last_name,
+			u.phone_number,
+			u.picture_profile,
+			t.created_at AS transaction_time
+		FROM transactions t
+		JOIN listings l ON t.listing_id = l.id
+		JOIN users u ON l.seller_id = u.id
+		JOIN books b ON l.book_id = b.id
+		WHERE t.buyer_id = ? AND t.payment_status = 'completed'
+	`
+
+	rows, err := ur.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var purchases []models.MyPurchase
+
+	for rows.Next() {
+		var p models.MyPurchase
+		err := rows.Scan(
+			&p.ListingID,
+			&p.BookID,
+			&p.SellerID,
+			&p.Price,
+			&p.BookTitle,
+			&p.SellerFirstName,
+			&p.SellerLastName,
+			&p.SellerPhone,
+			&p.SellerProfileImg,
+			&p.TransactionTime,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// Get first image from listing_images table
+		imgQuery := `SELECT image_url FROM listing_images WHERE listing_id = ? LIMIT 1`
+		var imageURL string
+		err = ur.db.QueryRowContext(ctx, imgQuery, p.ListingID).Scan(&imageURL)
+		if err == nil {
+			p.ImageURL = imageURL
+		}
+		
+		purchases = append(purchases, p)
+	}
+
+	return purchases, nil
+}
+
+func (ur *UserRepository) GetMyOrders(ctx context.Context, sellerID int) ([]models.MyOrder, error) {
+	query := `
+		SELECT 
+			t.listing_id,
+			b.title AS book_title,
+			t.transaction_amount AS price,
+			t.created_at AS transaction_time,
+			(
+				SELECT image_url 
+				FROM listing_images 
+				WHERE listing_id = t.listing_id 
+				LIMIT 1
+			) AS image_url,
+			u.id AS buyer_id,
+			u.first_name AS buyer_first_name,
+			u.last_name AS buyer_last_name,
+			u.phone_number AS buyer_phone,
+			u.address AS buyer_address,
+			u.picture_profile AS buyer_profile_image,
+			b.id AS book_id
+		FROM transactions t
+		JOIN listings l ON t.listing_id = l.id
+		JOIN books b ON l.book_id = b.id
+		JOIN users u ON t.buyer_id = u.id
+		WHERE l.seller_id = ? AND t.payment_status = 'completed'
+		ORDER BY t.created_at DESC;
+	`
+
+	rows, err := ur.db.QueryContext(ctx, query, sellerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var orders []models.MyOrder
+	for rows.Next() {
+		var o models.MyOrder
+		err := rows.Scan(
+			&o.ListingID,
+			&o.BookTitle,
+			&o.Price,
+			&o.TransactionTime,
+			&o.ImageURL,
+			&o.BuyerID,
+			&o.BuyerFirstName,
+			&o.BuyerLastName,
+			&o.BuyerPhone,
+			&o.BuyerAddress,
+			&o.BuyerProfileImage,
+			&o.BookID,
+		)
+		if err != nil {
+			return nil, err
+		}
+		orders = append(orders, o)
+	}
+
+	return orders, nil
+}
+
+func (ur *UserRepository) GetUsersByBookInWishlist(ctx context.Context, bookID int) ([]models.WishlistUser, error) {
+	query := `
+        SELECT u.id, u.email, u.first_name, u.last_name, u.picture_profile
+        FROM user_wishlist uw
+        JOIN users u ON uw.user_id = u.id
+        WHERE uw.book_id = ?
+    `
+
+	rows, err := ur.db.QueryContext(ctx, query, bookID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []models.WishlistUser
+	for rows.Next() {
+		var user models.WishlistUser
+		if err := rows.Scan(&user.UserID, &user.Email, &user.FirstName, &user.LastName, &user.ProfilePicture); err != nil {
+			return nil, err
+		}
+		users = append(users, user)
+	}
+
+	return users, nil
+}
+
 
 func (ur *UserRepository) RemoveListing(ctx context.Context, userID int, listingID int) error {
 	// Verify the user owns the listing and it's not already sold or removed
