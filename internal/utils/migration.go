@@ -20,6 +20,8 @@ func RunMigrations() {
             first_name VARCHAR(255) DEFAULT '',
             last_name VARCHAR(255) DEFAULT '',
 
+            address VARCHAR(255) DEFAULT '',
+
             provider ENUM('google','local') NOT NULL,
             
             hashed_password VARCHAR(255),

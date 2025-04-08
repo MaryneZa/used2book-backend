@@ -125,7 +125,7 @@ func (ph *PaymentHandler) CheckOutHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	params := &stripe.CheckoutSessionParams{
-		SuccessURL: stripe.String("http://localhost:3000/user/success"),
+		SuccessURL: stripe.String("http://localhost:3000/user/account/purchase"),
 		CancelURL:  stripe.String("http://localhost:3000/user/cancel"),
 		Mode:       stripe.String(string(stripe.CheckoutSessionModePayment)),
 		LineItems: []*stripe.CheckoutSessionLineItemParams{
@@ -256,8 +256,8 @@ func (ph *PaymentHandler) WebhookHandler(w http.ResponseWriter, r *http.Request)
 		err = ph.UserService.RemoveFromCart(r.Context(), buyerID, listingID)
 		if err != nil {
 			log.Println("❌ Wishlist Error:", err)
-			sendErrorResponse(w, http.StatusConflict, "Wishlist error: "+err.Error())
-			return
+			// sendErrorResponse(w, http.StatusConflict, "Wishlist error: "+err.Error())
+			// return
 		}
 
 		// Publish to RabbitMQ
@@ -277,8 +277,16 @@ func (ph *PaymentHandler) WebhookHandler(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
+        listing, err := ph.UserService.GetListingByID(r.Context(), listingID)
+	if err != nil || listing == nil {
+		sendErrorResponse(w, http.StatusNotFound, "Listing not found")
+		return
+	}
+
 		noti := map[string]interface{}{
-			"user_id":    int(buyerID),
+			"buyer_id":    int(buyerID),
+            "listing_id":   listingID,
+            "seller_id":    listing.SellerID,
 			"type":       "payment_success",
 			"message":    "Payment succeeded!",
 			"related_id": sessionID, // charge_id

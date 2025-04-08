@@ -2,6 +2,7 @@ package models
 
 import (
 	"time"
+	"database/sql"
 )
 
 type CartItem struct {
@@ -61,4 +62,35 @@ type OfferItem struct {
     BuyerPicture   string  `json:"buyer_picture_profile"` // New
 	InitialPrice   string  `json:"initial_price"`
 	Avaibility     string  `json:"avaibility"`
+}
+
+type MyPurchase struct {
+	ListingID        int     `json:"listing_id"`
+	BookTitle        string  `json:"book_title"`
+	Price            float64 `json:"price"`
+	TransactionTime time.Time `json:"transaction_time"`
+	ImageURL         string  `json:"image_url"`       
+	SellerFirstName  string  `json:"seller_first_name"`
+	SellerLastName   string  `json:"seller_last_name"`
+	SellerProfileImg string  `json:"seller_profile_img"`
+	SellerPhone     sql.NullString  `json:"seller_phone"`
+	BookID            int     `json:"book_id"`           
+	SellerID          int     `json:"seller_id"`
+}
+
+type MyOrder struct {
+	ListingID         int     `json:"listing_id"`
+	BookTitle         string  `json:"book_title"`
+	Price             float64 `json:"price"`
+	TransactionTime   string  `json:"transaction_time"`
+	ImageURL          string  `json:"image_url"`
+
+	BuyerID           int     `json:"buyer_id"`
+	BuyerFirstName    string  `json:"buyer_first_name"`
+	BuyerLastName     string  `json:"buyer_last_name"`
+	BuyerPhone        sql.NullString  `json:"buyer_phone"`
+	BuyerAddress      string  `json:"buyer_address"`
+	BuyerProfileImage string  `json:"buyer_profile_image"`
+
+	BookID            int     `json:"book_id"`
 }
