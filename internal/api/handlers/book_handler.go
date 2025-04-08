@@ -57,6 +57,43 @@ func (bh *BookHandler) GetAllGenres(w http.ResponseWriter, r *http.Request) {
 	
 }
 
+func (bh *BookHandler) GetAllAuthors(w http.ResponseWriter, r *http.Request) {
+
+	// Call the BookService method to get the total book count
+	authors, err := bh.BookService.GetAllAuthors(r.Context())
+	log.Println(authors)
+	if err != nil {
+		// Handle the error, e.g., return a 500 Internal Server Error
+		http.Error(w, "Failed to get all authors", http.StatusInternalServerError)
+		return
+	}
+
+	sendSuccessResponse(w, map[string]interface{}{
+		"authors": authors,
+	})
+	
+}
+
+func (bh *BookHandler) GetAllBookAuthors(w http.ResponseWriter, r *http.Request) {
+
+	// Call the BookService method to get the total book count
+	book_authors, err := bh.BookService.GetAllBookAuthors(r.Context())
+	log.Println(book_authors)
+	if err != nil {
+		// Handle the error, e.g., return a 500 Internal Server Error
+		http.Error(w, "Failed to get all book_authors", http.StatusInternalServerError)
+		return
+	}
+
+	sendSuccessResponse(w, map[string]interface{}{
+		"book_authors": book_authors,
+	})
+	
+}
+
+
+
+
 func (bh *BookHandler) GetRecommendedBooks(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value("user_id").(int)
 	if !ok {
@@ -407,7 +444,7 @@ func (bh *BookHandler) InsertBookHandler(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Validate required fields
-	if bookForm.Title == "" || bookForm.Author == "" {
+	if bookForm.Title == "" || len(bookForm.Author) == 0 {
 		sendErrorResponse(w, http.StatusBadRequest, "Title and Author are required")
 		return
 	}

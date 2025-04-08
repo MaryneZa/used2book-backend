@@ -50,15 +50,12 @@ func RunMigrations() {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );`,
-        
-
-		// provider_id VARCHAR(255),
 
 		// Books table
+        // author VARCHAR(255) NOT NULL,
 		`CREATE TABLE IF NOT EXISTS books (
             id INT AUTO_INCREMENT PRIMARY KEY,
             title VARCHAR(255) NOT NULL,
-            author VARCHAR(255) NOT NULL,
             description TEXT,
             language VARCHAR(50),
             isbn VARCHAR(20) UNIQUE,
@@ -68,6 +65,23 @@ func RunMigrations() {
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         );`,
+
+        `CREATE TABLE IF NOT EXISTS authors (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        );
+        `,
+
+        `CREATE TABLE IF NOT EXISTS book_authors (
+            book_id INT NOT NULL,
+            author_id INT NOT NULL,
+            PRIMARY KEY (book_id, author_id),
+            FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+            FOREIGN KEY (author_id) REFERENCES authors(id) ON DELETE CASCADE
+        );`,
+        
 
         // genres table
         `CREATE TABLE IF NOT EXISTS genres (

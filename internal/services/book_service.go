@@ -85,7 +85,14 @@ func (bs *BookService) GetAllGenres(ctx context.Context) ([]models.Genre, error)
 	return bs.bookRepo.GetAllGenres(ctx)
 }
 
+func (bs *BookService) GetAllAuthors(ctx context.Context) ([]models.Author, error) {
+	return bs.bookRepo.GetAllAuthors(ctx)
 
+}
+
+func (bs *BookService) GetAllBookAuthors(ctx context.Context) ([]models.BookAuthor, error) {
+	return bs.bookRepo.GetAllBookAuthors(ctx)
+}
 
 
 

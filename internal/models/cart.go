@@ -14,7 +14,7 @@ type CartItem struct {
 	AllowOffers   bool    `json:"allow_offers"`
 	SellerID      int     `json:"seller_id"`
 	BookTitle     string  `json:"book_title"`
-	BookAuthor    string  `json:"book_author"`
+	BookAuthor    []string  `json:"book_author"`
 	CoverImageURL string  `json:"cover_image_url"`
 	ImageURL      string  `json:"image_url,omitempty"` // Added for first listing image
 	Status        string  `json:"status"`
@@ -33,7 +33,7 @@ type ListingDetails struct {
 
 	// Book details
 	Title         string    `json:"title"`
-	Author        string    `json:"author"`
+	Author        []string    `json:"author"`
 	Description   string    `json:"description,omitempty"`
 	Language      string    `json:"language,omitempty"`
 	ISBN          string    `json:"isbn,omitempty"`
@@ -53,7 +53,7 @@ type OfferItem struct {
     Status        string  `json:"status"`
     BookID        int     `json:"book_id"`
     BookTitle     string  `json:"book_title"`
-    BookAuthor    string  `json:"book_author"`
+    BookAuthor    []string  `json:"book_author"`
     CoverImageURL string  `json:"cover_image_url"`
     ImageURL      string  `json:"image_url,omitempty"`
     SellerID      int     `json:"seller_id"`
