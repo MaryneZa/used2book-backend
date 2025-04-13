@@ -168,4 +168,30 @@ func getGoogleSheetAPIKey() (string, error) {
     return secret, nil
 }
 
+func (bs *BookService) UpdateBook(ctx context.Context, bookID int, book models.Book) error {
+	return bs.bookRepo.UpdateBook(ctx, bookID, book)
+}
+
+func (bs *BookService) UpdateBookGenres(ctx context.Context, bookID int, genreNames []string) error {
+	// Remove existing
+	err := bs.bookRepo.ClearBookGenres(ctx, bookID)
+	if err != nil {
+		return err
+	}
+
+	// Re-insert genres
+	for _, name := range genreNames {
+		genreID, err := bs.GetOrInsertGenre(ctx, name)
+		if err != nil {
+			return err
+		}
+		err = bs.AssociateBookWithGenre(ctx, bookID, genreID)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+
 

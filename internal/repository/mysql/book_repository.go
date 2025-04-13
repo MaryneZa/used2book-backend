@@ -157,15 +157,62 @@ func (br *BookRepository) GetOrInsertAuthor(ctx context.Context, authorName stri
 }
 
 
+// func (br *BookRepository) GetAllBooks(ctx context.Context) ([]models.Book, error) {
+// 	query := `
+//     SELECT b.id, b.title, b.description, b.language, b.isbn, 
+//            b.publisher, b.publish_date, b.cover_image_url,
+//            COALESCE(br.average_rating, 0), 
+//            COALESCE(br.num_ratings, 0)
+//     FROM books b
+//     LEFT JOIN book_ratings br ON b.id = br.book_id
+//     `
+
+// 	rows, err := br.db.QueryContext(ctx, query)
+// 	if err != nil {
+// 		return nil, fmt.Errorf("error querying books: %w", err)
+// 	}
+// 	defer rows.Close()
+
+// 	var books []models.Book
+
+// 	for rows.Next() {
+// 		var book models.Book
+// 		err := rows.Scan(
+// 			&book.ID, &book.Title, &book.Description,
+// 			&book.Language, &book.ISBN, &book.Publisher,
+// 			&book.PublishDate, &book.CoverImageURL,
+// 			&book.AverageRating, &book.NumRatings,
+// 		)
+// 		if err != nil {
+// 			return nil, fmt.Errorf("error scanning book: %w", err)
+// 		}
+
+// 		// Fetch authors for this book
+// 		authors, err := br.getAuthorsByBookID(ctx, book.ID)
+// 		if err != nil {
+// 			return nil, fmt.Errorf("error fetching authors: %w", err)
+// 		}
+// 		book.Author = authors
+
+// 		books = append(books, book)
+// 	}
+
+// 	if err = rows.Err(); err != nil {
+// 		return nil, fmt.Errorf("error iterating books: %w", err)
+// 	}
+
+// 	return books, nil
+// }
+
 func (br *BookRepository) GetAllBooks(ctx context.Context) ([]models.Book, error) {
 	query := `
-    SELECT b.id, b.title, b.description, b.language, b.isbn, 
-           b.publisher, b.publish_date, b.cover_image_url,
-           COALESCE(br.average_rating, 0), 
-           COALESCE(br.num_ratings, 0)
-    FROM books b
-    LEFT JOIN book_ratings br ON b.id = br.book_id
-    `
+		SELECT b.id, b.title, b.description, b.language, b.isbn, 
+			   b.publisher, b.publish_date, b.cover_image_url,
+			   COALESCE(br.average_rating, 0), 
+			   COALESCE(br.num_ratings, 0)
+		FROM books b
+		LEFT JOIN book_ratings br ON b.id = br.book_id
+	`
 
 	rows, err := br.db.QueryContext(ctx, query)
 	if err != nil {
@@ -173,8 +220,13 @@ func (br *BookRepository) GetAllBooks(ctx context.Context) ([]models.Book, error
 	}
 	defer rows.Close()
 
-	var books []models.Book
+	// 🧠 Fetch authors only once
+	authorsMap, err := br.GetAllBookAuthorsHelper(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error loading book authors: %w", err)
+	}
 
+	var books []models.Book
 	for rows.Next() {
 		var book models.Book
 		err := rows.Scan(
@@ -186,23 +238,38 @@ func (br *BookRepository) GetAllBooks(ctx context.Context) ([]models.Book, error
 		if err != nil {
 			return nil, fmt.Errorf("error scanning book: %w", err)
 		}
-
-		// Fetch authors for this book
-		authors, err := br.getAuthorsByBookID(ctx, book.ID)
-		if err != nil {
-			return nil, fmt.Errorf("error fetching authors: %w", err)
-		}
-		book.Author = authors
-
+		book.Author = authorsMap[book.ID]
 		books = append(books, book)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating books: %w", err)
 	}
 
 	return books, nil
 }
+
+
+func (br *BookRepository) GetAllBookAuthorsHelper(ctx context.Context) (map[int][]string, error) {
+	query := `
+		SELECT ba.book_id, a.name
+		FROM book_authors ba
+		JOIN authors a ON ba.author_id = a.id
+	`
+	rows, err := br.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	authorsMap := make(map[int][]string)
+	for rows.Next() {
+		var bookID int
+		var authorName string
+		if err := rows.Scan(&bookID, &authorName); err != nil {
+			return nil, err
+		}
+		authorsMap[bookID] = append(authorsMap[bookID], authorName)
+	}
+	return authorsMap, nil
+}
+
 
 // GetBookByID retrieves a book by its ID, including its rating information
 func (br *BookRepository) GetBookByID(ctx context.Context, bookID int) (*models.Book, error) {
@@ -582,4 +649,50 @@ func (br *BookRepository) GetAllGenres(ctx context.Context) ([]models.Genre, err
 
     log.Printf("Found %d genres", len(genres))
     return genres, nil
+}
+
+func (br *BookRepository) UpdateBook(ctx context.Context, bookID int, book models.Book) error {
+	// Update book details
+	query := `
+		UPDATE books 
+		SET title = ?, description = ?, language = ?, isbn = ?, 
+			publisher = ?, publish_date = ?, cover_image_url = ?
+		WHERE id = ?
+	`
+	_, err := br.db.ExecContext(ctx, query,
+		book.Title, book.Description, book.Language, book.ISBN,
+		book.Publisher, book.PublishDate, book.CoverImageURL, bookID,
+	)
+	if err != nil {
+		return err
+	}
+
+	// --- Handle Authors ---
+	// Delete existing authors for the book
+	_, err = br.db.ExecContext(ctx, `DELETE FROM book_authors WHERE book_id = ?`, bookID)
+	if err != nil {
+		return err
+	}
+
+	// Re-insert new authors
+	for _, authorName := range book.Author {
+		authorID, err := br.GetOrInsertAuthor(ctx, authorName)
+		if err != nil {
+			log.Printf("❌ Error inserting author '%s': %v", authorName, err)
+			continue
+		}
+
+		_, err = br.db.ExecContext(ctx, `INSERT IGNORE INTO book_authors (book_id, author_id) VALUES (?, ?)`, bookID, authorID)
+		if err != nil {
+			log.Printf("❌ Error linking book to author '%s': %v", authorName, err)
+		}
+	}
+
+	// Note: genre update should be handled separately to allow more control
+	return nil
+}
+
+func (br *BookRepository) ClearBookGenres(ctx context.Context, bookID int) error {
+	_, err := br.db.ExecContext(ctx, `DELETE FROM book_genres WHERE book_id = ?`, bookID)
+	return err
 }

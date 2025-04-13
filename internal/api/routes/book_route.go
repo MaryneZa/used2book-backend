@@ -65,9 +65,13 @@ func BookRoutes(db *sql.DB) http.Handler {
 	r.With(middleware.AuthMiddleware).Get("/recommended-books", bookHandler.GetRecommendedBooks)
 
 	r.With(middleware.AuthMiddleware).Post("/insert-book", bookHandler.InsertBookHandler)
+	r.With(middleware.AuthMiddleware).Post("/edit-book/{bookID:[0-9]+}", bookHandler.UpdateBookHandler)
+
 
 	r.Get("/all-authors", bookHandler.GetAllAuthors)
 	r.Get("/all-book-authors", bookHandler.GetAllBookAuthors)
+
+
 
 
 

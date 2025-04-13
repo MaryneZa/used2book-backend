@@ -126,6 +126,23 @@ func (ur *UserRepository) CreateBankAccount(ctx context.Context, bank *models.Ba
 	return int(id), nil
 }
 
+func (ur *UserRepository) CreateBookRequest(ctx context.Context, req *models.BookRequest) (bool, error) {
+	query := `
+		INSERT INTO books_request (user_id, title, isbn, note, created_at, updated_at)
+		VALUES (?, ?, ?, ?, NOW(), NOW())
+	`
+
+	_, err := ur.db.ExecContext(ctx, query, req.UserID, req.Title, req.ISBN, req.Note)
+	if err != nil {
+		return false, err
+	}
+
+
+	log.Println("✅ create book request successfully !")
+	
+	return true, nil
+}
+
 
 func (ur *UserRepository) GetGender(ctx context.Context, userID int) (string, error) {
 	var gender string
@@ -268,13 +285,13 @@ func (ur *UserRepository) AddBookToLibrary(ctx context.Context, userID int, book
 	return false, nil
 }
 
-func (ur *UserRepository) AddBookToListing(ctx context.Context, userID int, bookID int, price float32, allowOffer bool, imageURLs []string, sellerNote string) (bool, error) {
+func (ur *UserRepository) AddBookToListing(ctx context.Context, userID int, bookID int, price float32, allowOffer bool, imageURLs []string, sellerNote string, phone_number string) (bool, error) {
 
-	query := `INSERT INTO listings (seller_id, book_id, price, allow_offers, seller_note, created_at, updated_at) 
-                  VALUES (?, ?, ?, ?, ?, NOW(), NOW()) 
+	query := `INSERT INTO listings (seller_id, book_id, price, allow_offers, seller_note, phone_number, created_at, updated_at) 
+                  VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW()) 
                   ON DUPLICATE KEY UPDATE price = VALUES(price), allow_offers = VALUES(allow_offers), status = 'for_sale', updated_at = NOW()`
 
-	result, err := ur.db.ExecContext(ctx, query, userID, bookID, price, allowOffer, sellerNote)
+	result, err := ur.db.ExecContext(ctx, query, userID, bookID, price, allowOffer, sellerNote, phone_number)
 	if err != nil {
 		return false, fmt.Errorf("failed to insert into listings: %v", err)
 	}
@@ -590,6 +607,15 @@ func (ur *UserRepository) CountUsers() (int, error) {
 	return count, nil
 }
 
+func (ur *UserRepository) DeleteUserLibraryByID(ctx context.Context, id int) (bool, error){
+	query := `DELETE FROM user_libraries WHERE id = ?`
+	_, err := ur.db.QueryContext(ctx, query, id)
+	if err != nil{
+		return false, err
+	}
+	return true, err
+}
+
 func (ur *UserRepository) GetUserLibrary(ctx context.Context, userID int) ([]models.UserLibrary, error) {
 	query := `SELECT id, user_id, book_id, reading_status
 	          FROM user_libraries 
@@ -739,10 +765,10 @@ func (ur *UserRepository) GetPurchasedListingsByUserID(ctx context.Context, user
 			l.book_id,
 			l.seller_id,
 			l.price,
+			l.phone_number,
 			b.title AS book_title,
 			u.first_name,
 			u.last_name,
-			u.phone_number,
 			u.picture_profile,
 			t.created_at AS transaction_time
 		FROM transactions t
@@ -767,10 +793,10 @@ func (ur *UserRepository) GetPurchasedListingsByUserID(ctx context.Context, user
 			&p.BookID,
 			&p.SellerID,
 			&p.Price,
+			&p.SellerPhone,
 			&p.BookTitle,
 			&p.SellerFirstName,
 			&p.SellerLastName,
-			&p.SellerPhone,
 			&p.SellerProfileImg,
 			&p.TransactionTime,
 		)
@@ -962,7 +988,7 @@ func (ur *UserRepository) GetWishlistByUserID(ctx context.Context, userID int) (
 func (ur *UserRepository) GetListingByID(ctx context.Context, listingID int) (*models.ListingDetails, error) {
 	query := `
         SELECT 
-            l.id AS listing_id, l.seller_id, l.book_id, l.price, l.status, l.allow_offers, l.seller_note,
+            l.id AS listing_id, l.seller_id, l.book_id, l.price, l.status, l.allow_offers, l.seller_note, l.phone_number,
             b.title, b.description, b.language, b.isbn, b.publisher, 
             b.publish_date, b.cover_image_url, 
             COALESCE(br.average_rating, 0) AS average_rating, 
@@ -978,7 +1004,7 @@ func (ur *UserRepository) GetListingByID(ctx context.Context, listingID int) (*m
 	var listing models.ListingDetails
 	err := ur.db.QueryRowContext(ctx, query, listingID).Scan(
 		&listing.ListingID, &listing.SellerID, &listing.BookID,
-		&listing.Price, &listing.Status, &listing.AllowOffers, &listing.SellerNote,
+		&listing.Price, &listing.Status, &listing.AllowOffers, &listing.SellerNote, &listing.PhoneNumber,
 		&listing.Title, &listing.Description,
 		&listing.Language, &listing.ISBN, &listing.Publisher,
 		&listing.PublishDate, &listing.CoverImageURL,
@@ -1381,7 +1407,7 @@ func (ur *UserRepository) RemoveFromOffers(ctx context.Context, buyerID int, lis
 // AcceptOffer: Seller accepts an offer
 
 // repository/user_repository.go
-func (ur *UserRepository) AcceptOffer(ctx context.Context, sellerID int, offerID int) error {
+func (ur *UserRepository) AcceptOffer(ctx context.Context, sellerID int, offerID int) (int, error) {
 	query := `
         UPDATE offers o
         JOIN listings l ON o.listing_id = l.id
@@ -1394,23 +1420,46 @@ func (ur *UserRepository) AcceptOffer(ctx context.Context, sellerID int, offerID
     `
 	result, err := ur.db.ExecContext(ctx, query, offerID, sellerID)
 	if err != nil {
-		return fmt.Errorf("failed to accept offer: %w", err)
+		return 0, fmt.Errorf("failed to accept offer: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("error checking rows affected: %w", err)
+		return 0, fmt.Errorf("error checking rows affected: %w", err)
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("no pending offer found with ID %d for seller %d or listing not for sale", offerID, sellerID)
+		return 0, fmt.Errorf("no pending offer found with ID %d for seller %d or listing not for sale", offerID, sellerID)
 	}
 
 	log.Printf("Seller %d accepted offer %d", sellerID, offerID)
-	return nil
+
+	buyer_id, err := ur.GetBuyerIDFromOfferID(ctx, offerID)
+
+	if err != nil {
+		return 0, fmt.Errorf("error get buyer_id: %w", err)
+	}
+
+	return buyer_id, nil
 }
 
+func (ur *UserRepository) GetBuyerIDFromOfferID(ctx context.Context, offerID int) (int, error) {
+	query := `SELECT buyer_id FROM offers WHERE id = ?`
+	var buyerID int
+
+	err := ur.db.QueryRowContext(ctx, query, offerID).Scan(&buyerID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, fmt.Errorf("no offer found with id %d", offerID)
+		}
+		return 0, fmt.Errorf("failed to get buyer_id of offer: %w", err)
+	}
+
+	return buyerID, nil
+}
+
+
 // RejectOffer: Seller rejects an offer
-func (ur *UserRepository) RejectOffer(ctx context.Context, sellerID int, offerID int) error {
+func (ur *UserRepository) RejectOffer(ctx context.Context, sellerID int, offerID int) (int, error) {
 	query := `
         UPDATE offers o
         JOIN listings l ON o.listing_id = l.id
@@ -1422,19 +1471,26 @@ func (ur *UserRepository) RejectOffer(ctx context.Context, sellerID int, offerID
     `
 	result, err := ur.db.ExecContext(ctx, query, offerID, sellerID)
 	if err != nil {
-		return fmt.Errorf("failed to reject offer: %w", err)
+		return 0, fmt.Errorf("failed to reject offer: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("error checking rows affected: %w", err)
+		return 0, fmt.Errorf("error checking rows affected: %w", err)
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("no pending offer found with ID %d for seller %d", offerID, sellerID)
+		return 0, fmt.Errorf("no pending offer found with ID %d for seller %d", offerID, sellerID)
 	}
 
 	log.Printf("Seller %d rejected offer %d", sellerID, offerID)
-	return nil
+
+	buyer_id, err := ur.GetBuyerIDFromOfferID(ctx, offerID)
+
+	if err != nil {
+		return 0, fmt.Errorf("error get buyer_id: %w", err)
+	}
+
+	return buyer_id, nil
 }
 
 // repository/user_repository.go

@@ -36,7 +36,7 @@ func SetupRouter(db *sql.DB, rabbitConn *amqp.Connection) http.Handler {
 
 	// ✅ Register API routes correctly
 	r.Mount("/auth", routes.AuthRoutes(db))
-	r.Mount("/user", routes.UserRoutes(db))
+	r.Mount("/user", routes.UserRoutes(db, rabbitConn))
 	r.Mount("/book", routes.BookRoutes(db))
 	r.Mount("/auth-token", routes.TokenRoutes(db))
 	r.Mount("/payment", routes.PaymentRoutes(db, rabbitConn))

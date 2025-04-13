@@ -36,7 +36,7 @@ func (th *TwilioOTPHandler) SendOTPHandler(w http.ResponseWriter, r *http.Reques
 
 	// ✅ Check if UserService is nil
 	if th.UserService == nil {
-		log.Println("❌ Error: UserService is nil!")
+		log.Println("Error: UserService is nil!")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -44,24 +44,22 @@ func (th *TwilioOTPHandler) SendOTPHandler(w http.ResponseWriter, r *http.Reques
 	// ✅ Log incoming request
 	log.Println("📞 Request to send OTP for phone:", req.PhoneNumber)
 
-	// ✅ Check if the phone number exists
-	taken, err := th.UserService.IsPhoneNumberTaken(ctx, req.PhoneNumber)
-	if err != nil {
-		log.Println("❌ Error checking phone number:", err)
-		sendErrorResponse(w, http.StatusInternalServerError, "phone number internal server error: "+err.Error())
-		return
-	}
+	// taken, err := th.UserService.IsPhoneNumberTaken(ctx, req.PhoneNumber)
+	// if err != nil {
+	// 	log.Println("Error checking phone number:", err)
+	// 	sendErrorResponse(w, http.StatusInternalServerError, "phone number internal server error: "+err.Error())
+	// 	return
+	// }
 
-	// ✅ Ensure `taken` is correctly handled
-	if taken {
-		log.Println("❌ Phone number already registered:", req.PhoneNumber)
-		sendErrorResponse(w, http.StatusConflict, "phone number already registered")
-		return
-	}
+	// if taken {
+	// 	log.Println("Phone number already registered:", req.PhoneNumber)
+	// 	sendErrorResponse(w, http.StatusConflict, "phone number already registered")
+	// 	return
+	// }
 
 
 	// ✅ Send OTP and log response
-	err = twiliootp.SendOTP(ctx, req.PhoneNumber)
+	err := twiliootp.SendOTP(ctx, req.PhoneNumber)
 	if err != nil {
 		log.Println("❌ Error sending OTP:", err)
 		sendErrorResponse(w, http.StatusInternalServerError, "Failed to send OTP: "+err.Error())
@@ -94,14 +92,14 @@ func (th *TwilioOTPHandler) VerifyOTPHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	userID := r.Context().Value("user_id").(int)
+	// userID := r.Context().Value("user_id").(int)
 
-	// 2. Check if user with same email already exists
-	err = th.UserService.EditPhoneNumber(r.Context(), userID, req.PhoneNumber)
-	if err != nil {
-		sendErrorResponse(w, http.StatusConflict, "phone number "+err.Error()) // 409 Conflict if user exists
-		return
-	}
+	// // 2. Check if user with same email already exists
+	// err = th.UserService.EditPhoneNumber(r.Context(), userID, req.PhoneNumber)
+	// if err != nil {
+	// 	sendErrorResponse(w, http.StatusConflict, "phone number "+err.Error()) // 409 Conflict if user exists
+	// 	return
+	// }
 
 	// Step 3: Success Response
 	sendSuccessResponse(w, map[string]interface{}{

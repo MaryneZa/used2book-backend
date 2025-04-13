@@ -9,11 +9,14 @@ import (
 	"strings"
 	"used2book-backend/internal/models"
 	"used2book-backend/internal/services"
+	"github.com/streadway/amqp"
+	"time"
 )
 
 type UserHandler struct {
 	UserService   *services.UserService
 	UploadService *services.UploadService
+	RabbitMQConn *amqp.Connection
 }
 
 type CreatePaymentRequest struct {
@@ -74,6 +77,37 @@ func (uh * UserHandler) CreateBankAccountHandler(w http.ResponseWriter, r *http.
 
 }
 
+func (uh * UserHandler) CreateBookRequestHandle(w http.ResponseWriter, r *http.Request) {
+	userID, ok := r.Context().Value("user_id").(int)
+	if !ok || userID == 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Parse request body
+	var req *models.BookRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	req.UserID = userID
+
+	// Call service to update preferences
+	status, err := uh.UserService.CreateBookRequest(r.Context(), req)
+	if err != nil {
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to update preferences",)
+		return
+	}
+
+	sendSuccessResponse(w, map[string]interface{}{
+		"success": status,
+	})
+
+}
+
 func (uh *UserHandler) SetUserPreferredGenresHandler(w http.ResponseWriter, r *http.Request) {
 	// Extract user ID from context
 	userID, ok := r.Context().Value("user_id").(int)
@@ -105,6 +139,8 @@ func (uh *UserHandler) SetUserPreferredGenresHandler(w http.ResponseWriter, r *h
 		"message": "User preferred genres updated successfully",
 	})
 }
+
+
 
 func (uh *UserHandler) GetUserPreferencesHandler(w http.ResponseWriter, r *http.Request) {
 	// Extract user ID from context (set by authentication middleware)
@@ -431,7 +467,7 @@ func (uh *UserHandler) AddBookToListingHandler(w http.ResponseWriter, r *http.Re
         }
     }
 
-    _, err = uh.UserService.AddBookToListing(r.Context(), userID, user.BookID, user.Price, user.AllowOffer, uploadURLs, user.SellerNote)
+    _, err = uh.UserService.AddBookToListing(r.Context(), userID, user.BookID, user.Price, user.AllowOffer, uploadURLs, user.SellerNote, user.PhoneNumber)
     if err != nil {
         sendErrorResponse(w, http.StatusConflict, "Failed to process book: "+err.Error())
         return
@@ -543,6 +579,25 @@ func (uh *UserHandler) GetUsersByWishlistBookIDHandler(w http.ResponseWriter, r 
 
 	sendSuccessResponse(w, map[string]interface{}{
 		"users": users,
+	})
+}
+
+func (uh *UserHandler) DeleteUserLibraryByIDHandler(w http.ResponseWriter, r *http.Request) {
+	IDStr := chi.URLParam(r, "id")
+	ID, err := strconv.Atoi(IDStr)
+	if err != nil {
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid book ID")
+		return
+	}
+
+	delete_status, err := uh.UserService.DeleteUserLibraryByID(r.Context(), ID)
+	if err != nil {
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to delete book from library")
+		return
+	}
+
+	sendSuccessResponse(w, map[string]interface{}{
+		"success": delete_status,
 	})
 }
 
@@ -901,6 +956,50 @@ func (uh *UserHandler) AddToOffersHandler(w http.ResponseWriter, r *http.Request
         return
     }
 
+	listing, err := uh.UserService.GetListingByID(r.Context(), req.ListingID)
+	if err != nil {
+		// Handle the error, e.g., return a 500 Internal Server Error
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch listing")
+		return
+	}
+
+	// Publish to RabbitMQ
+	ch, err := uh.RabbitMQConn.Channel()
+	if err != nil {
+		log.Println("❌ RabbitMQ Channel Error:", err)
+		return // Don’t fail webhook response
+	}
+	defer ch.Close()
+
+	q, err := ch.QueueDeclare(
+		"offer_queue", // New queue for offer_queue
+		true, false, false, false, nil,
+	)
+	if err != nil {
+		log.Println("❌ Queue Declare Error:", err)
+		return
+	}
+
+	noti := map[string]interface{}{
+		"user_id":   int(listing.SellerID),
+		"type":       "offer",
+		"created_at": time.Now(),
+	}
+
+	body, _ := json.Marshal(noti)
+
+	err = ch.Publish(
+		"", q.Name, false, false,
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        body,
+		},
+	)
+	if err != nil {
+		log.Println("❌ Publish Error:", err)
+	}
+
+
     log.Println("✅ Added offer successfully with ID:", id)
     sendSuccessResponse(w, map[string]interface{}{
         "success": true,
@@ -985,12 +1084,49 @@ func (uh *UserHandler) AcceptOfferHandler(w http.ResponseWriter, r *http.Request
         return
     }
 
-    err := uh.UserService.AcceptOffer(r.Context(), sellerID, req.OfferID)
+    buyer_id, err := uh.UserService.AcceptOffer(r.Context(), sellerID, req.OfferID)
     if err != nil {
         log.Println("❌ Accept offer error:", err)
         sendErrorResponse(w, http.StatusConflict, "Offer error: "+err.Error())
         return
     }
+
+	ch, err := uh.RabbitMQConn.Channel()
+	if err != nil {
+		log.Println("❌ RabbitMQ Channel Error:", err)
+		return // Don’t fail webhook response
+	}
+	defer ch.Close()
+
+	q, err := ch.QueueDeclare(
+		"offer_queue", // New queue for offer_queue
+		true, false, false, false, nil,
+	)
+	if err != nil {
+		log.Println("❌ Queue Declare Error:", err)
+		return
+	}
+
+	noti := map[string]interface{}{
+		"user_id":  buyer_id,
+		"type":      "offer",
+		"created_at": time.Now(),
+	}
+
+	body, _ := json.Marshal(noti)
+
+	err = ch.Publish(
+		"", q.Name, false, false,
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        body,
+		},
+	)
+	if err != nil {
+		log.Println("❌ Publish Error:", err)
+	}
+
+
 
     sendSuccessResponse(w, map[string]interface{}{
         "success": true,
@@ -1013,12 +1149,47 @@ func (uh *UserHandler) RejectOfferHandler(w http.ResponseWriter, r *http.Request
         return
     }
 
-    err := uh.UserService.RejectOffer(r.Context(), sellerID, req.OfferID)
+    buyer_id, err := uh.UserService.RejectOffer(r.Context(), sellerID, req.OfferID)
     if err != nil {
         log.Println("❌ Reject offer error:", err)
         sendErrorResponse(w, http.StatusConflict, "Offer error: "+err.Error())
         return
     }
+
+	ch, err := uh.RabbitMQConn.Channel()
+	if err != nil {
+		log.Println("❌ RabbitMQ Channel Error:", err)
+		return // Don’t fail webhook response
+	}
+	defer ch.Close()
+
+	q, err := ch.QueueDeclare(
+		"offer_queue", // New queue for offer_queue
+		true, false, false, false, nil,
+	)
+	if err != nil {
+		log.Println("❌ Queue Declare Error:", err)
+		return
+	}
+
+	noti := map[string]interface{}{
+		"user_id":  buyer_id,
+		"type":      "offer",
+		"created_at": time.Now(),
+	}
+
+	body, _ := json.Marshal(noti)
+
+	err = ch.Publish(
+		"", q.Name, false, false,
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        body,
+		},
+	)
+	if err != nil {
+		log.Println("❌ Publish Error:", err)
+	}
 
     sendSuccessResponse(w, map[string]interface{}{
         "success": true,

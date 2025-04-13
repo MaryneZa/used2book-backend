@@ -10,9 +10,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	_ "github.com/go-sql-driver/mysql" // Import the MySQL driver
+
+	"github.com/streadway/amqp"
+
 )
 
-func UserRoutes(db *sql.DB) http.Handler {
+
+func UserRoutes(db *sql.DB, rabbitConn *amqp.Connection) http.Handler {
 
 
 	userRepo := mysql.NewUserRepository(db)
@@ -23,6 +27,7 @@ func UserRoutes(db *sql.DB) http.Handler {
 	userHandler := &handlers.UserHandler{
 		UserService:  userService,
 		UploadService:  uploadService,
+		RabbitMQConn: rabbitConn,
 	}
 
 	r := chi.NewRouter()
@@ -115,6 +120,7 @@ func UserRoutes(db *sql.DB) http.Handler {
 	
 	r.With(middleware.AuthMiddleware).Get("/user-wishlist/{bookID:[0-9]+}", userHandler.GetUsersByWishlistBookIDHandler) 
 	
+	r.With(middleware.AuthMiddleware).Post("/delete-user-library/{id:[0-9]+}", userHandler.DeleteUserLibraryByIDHandler) 
 
 
 	// r.Get("/post", uh.GetPostByPostIDHandler) // e.g., /post?post_id=1

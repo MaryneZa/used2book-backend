@@ -60,6 +60,13 @@ type WishlistUser struct {
 	ProfilePicture  string `json:"picture_profile" db:"picture_profile"`
 }
 
+type BookRequest struct {
+	UserID        int    `json:"user_id" db:"user_id"`
+	Title         string    `json:"title" db:"title"`
+    ISBN          string    `json:"isbn,omitempty" db:"isbn"`
+	Note 		  string    `json:"note,omitempty" db:"note"`
+}
+
 
 type GetAllUsers struct {
 	ID                int            `json:"id" db:"id"`
@@ -111,6 +118,8 @@ type UserAddListingForm struct {
 	Price      float32 `json:"price" db:"price"`
 	AllowOffer bool    `json:"allow_offers" db:"allow_offers"`
 	SellerNote string  `json:"seller_note" db:"seller_note"`
+	PhoneNumber  string `json:"phone_number" db:"phone_number"`
+
 }
 
 type UserLibrary struct {

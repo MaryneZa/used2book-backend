@@ -277,16 +277,16 @@ func (ph *PaymentHandler) WebhookHandler(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-        listing, err := ph.UserService.GetListingByID(r.Context(), listingID)
-	if err != nil || listing == nil {
-		sendErrorResponse(w, http.StatusNotFound, "Listing not found")
-		return
-	}
+		listing, err := ph.UserService.GetListingByID(r.Context(), listingID)
+		if err != nil || listing == nil {
+			sendErrorResponse(w, http.StatusNotFound, "Listing not found")
+			return
+		}
 
 		noti := map[string]interface{}{
-			"buyer_id":    int(buyerID),
-            "listing_id":   listingID,
-            "seller_id":    listing.SellerID,
+			"buyer_id":   int(buyerID),
+			"listing_id": listingID,
+			"seller_id":  listing.SellerID,
 			"type":       "payment_success",
 			"message":    "Payment succeeded!",
 			"related_id": sessionID, // charge_id

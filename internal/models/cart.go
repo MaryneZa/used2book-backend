@@ -30,6 +30,7 @@ type ListingDetails struct {
 	Status        string         `json:"status"`
 	AllowOffers   bool           `json:"allow_offers"`
 	SellerNote    string         `json:"seller_note" db:"seller_note"`
+	PhoneNumber   string `json:"phone_number" db:"phone_number"`
 
 	// Book details
 	Title         string    `json:"title"`
@@ -73,7 +74,8 @@ type MyPurchase struct {
 	SellerFirstName  string  `json:"seller_first_name"`
 	SellerLastName   string  `json:"seller_last_name"`
 	SellerProfileImg string  `json:"seller_profile_img"`
-	SellerPhone     sql.NullString  `json:"seller_phone"`
+	SellerPhone     string  `json:"seller_phone"`
+
 	BookID            int     `json:"book_id"`           
 	SellerID          int     `json:"seller_id"`
 }

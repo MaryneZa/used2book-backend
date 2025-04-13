@@ -10,7 +10,7 @@ import (
 	"io"
 	"log"
 	"strconv"
-
+	"math/rand"
 	"github.com/go-chi/chi/v5"
 
 	// "github.com/gorilla/mux"
@@ -102,7 +102,7 @@ func (bh *BookHandler) GetRecommendedBooks(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Fetch recommendations from the Flask API
-	resp, err := http.Get("http://localhost:5000/recommendations?user_id=" + strconv.Itoa(userID))
+	resp, err := http.Get("http://localhost:5005/recommendations?user_id=" + strconv.Itoa(userID))
 	if err != nil {
 		sendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch recommendations: "+err.Error())
 		return
@@ -133,6 +133,13 @@ func (bh *BookHandler) GetRecommendedBooks(w http.ResponseWriter, r *http.Reques
 		}
 		books = append(books, *book)
 	}
+
+	perm := rand.Perm(len(books))
+	shuffledBooks := make([]models.Book, len(books))
+	for i, p := range perm {
+		shuffledBooks[i] = books[p]
+	}
+	books = shuffledBooks
 
 	// Send response
 	sendSuccessResponse(w, map[string]interface{}{
@@ -514,6 +521,91 @@ func (bh *BookHandler) InsertBookHandler(w http.ResponseWriter, r *http.Request)
 		"success": true,
 		"message": "Book inserted successfully",
 		"book_id": bookID,
+	})
+}
+
+func (bh *BookHandler) UpdateBookHandler(w http.ResponseWriter, r *http.Request) {
+	bookIDStr := chi.URLParam(r, "bookID")
+	bookID, err := strconv.Atoi(bookIDStr)
+	if err != nil {
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid book ID")
+		return
+	}
+
+	err = r.ParseMultipartForm(10 << 20)
+	if err != nil {
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid form data")
+		return
+	}
+
+	jsonData := r.FormValue("data")
+	var bookForm models.BookForm
+	if err := json.Unmarshal([]byte(jsonData), &bookForm); err != nil {
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid JSON format")
+		return
+	}
+
+	if bookForm.Title == "" || len(bookForm.Author) == 0 {
+		sendErrorResponse(w, http.StatusBadRequest, "Title and Author are required")
+		return
+	}
+
+	if len(bookForm.Genres) == 0 {
+		sendErrorResponse(w, http.StatusBadRequest, "At least one genre is required")
+		return
+	}
+
+	// Optional cover image upload
+	var coverImageURL string
+	files := r.MultipartForm.File["cover_image"]
+	if len(files) > 0 {
+		fileHandler := files[0]
+		file, err := fileHandler.Open()
+		if err != nil {
+			sendErrorResponse(w, http.StatusInternalServerError, "Error opening file")
+			return
+		}
+		defer file.Close()
+
+		coverImageURL, err = bh.UploadService.UploadImageURL(file, fileHandler.Filename)
+		if err != nil {
+			sendErrorResponse(w, http.StatusInternalServerError, "Image upload failed: "+err.Error())
+			return
+		}
+	}
+
+	// If no new image uploaded, use existing (client should send it back)
+	if coverImageURL == "" {
+		coverImageURL = bookForm.CoverImageURL
+	}
+
+	book := models.Book{
+		Title:         bookForm.Title,
+		Author:        bookForm.Author,
+		Description:   bookForm.Description,
+		Language:      bookForm.Language,
+		ISBN:          bookForm.ISBN,
+		Publisher:     bookForm.Publisher,
+		PublishDate:   bookForm.PublishDate,
+		CoverImageURL: coverImageURL,
+	}
+
+	err = bh.BookService.UpdateBook(r.Context(), bookID, book)
+	if err != nil {
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to update book: "+err.Error())
+		return
+	}
+
+	// Handle genres
+	err = bh.BookService.UpdateBookGenres(r.Context(), bookID, bookForm.Genres)
+	if err != nil {
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to update genres: "+err.Error())
+		return
+	}
+
+	sendSuccessResponse(w, map[string]interface{}{
+		"success": true,
+		"message": "Book updated successfully",
 	})
 }
 

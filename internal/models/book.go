@@ -87,6 +87,7 @@ type BookForm struct {
 	Publisher   string    `json:"publisher,omitempty"`
 	PublishDate time.Time `json:"publish_date,omitempty"` // Expecting "2025-03-19 03:19:39"
 	Genres      []string  `json:"genres"`                 // Array of genre names
+	CoverImageURL string    `json:"cover_image_url,omitempty"`
 }
 
 

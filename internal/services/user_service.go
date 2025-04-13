@@ -76,8 +76,8 @@ func (us *UserService) AddBookToWishlist(ctx context.Context, userID int, bookID
 	return us.userRepo.AddBookToWishlist(ctx , userID, bookID)
 }
 
-func (us *UserService) AddBookToListing(ctx context.Context, userID int, bookID int, price float32, allow_offer bool, imageURLs []string, seller_note string)  (bool, error) {
-	return us.userRepo.AddBookToListing(ctx , userID, bookID, price, allow_offer, imageURLs, seller_note)
+func (us *UserService) AddBookToListing(ctx context.Context, userID int, bookID int, price float32, allow_offer bool, imageURLs []string, seller_note string, phone_number string)  (bool, error) {
+	return us.userRepo.AddBookToListing(ctx , userID, bookID, price, allow_offer, imageURLs, seller_note, phone_number)
 }
 
 func (us *UserService) CountUsers() (int, error) {
@@ -179,11 +179,11 @@ func (us *UserService) RemoveFromOffers(ctx context.Context, buyerID int, listin
     return us.userRepo.RemoveFromOffers(ctx, buyerID, listingID)
 }
 
-func (us *UserService) AcceptOffer(ctx context.Context, sellerID int, offerID int) error {
+func (us *UserService) AcceptOffer(ctx context.Context, sellerID int, offerID int) (int, error) {
     return us.userRepo.AcceptOffer(ctx, sellerID, offerID)
 }
 
-func (us *UserService) RejectOffer(ctx context.Context, sellerID int, offerID int) error {
+func (us *UserService) RejectOffer(ctx context.Context, sellerID int, offerID int) (int, error) {
     return us.userRepo.RejectOffer(ctx, sellerID, offerID)
 }
 
@@ -283,7 +283,13 @@ func (us *UserService) IsPostLikedByUser(ctx context.Context, postID, userID int
     return us.userRepo.IsPostLikedByUser(ctx, postID, userID)
 }
 
+func (us *UserService) DeleteUserLibraryByID(ctx context.Context, bookID int) (bool, error) {
+    return us.userRepo.DeleteUserLibraryByID(ctx, bookID)
+}
 
+func (us *UserService) CreateBookRequest(ctx context.Context, req *models.BookRequest) (bool, error) {
+    return us.userRepo.CreateBookRequest(ctx, req)
+}
 
 
 
