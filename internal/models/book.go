@@ -57,6 +57,7 @@ type BookReview struct {
 	Comment   string    `json:"comment"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	Title  	  string 	`json:"title"`
 }
 
 

@@ -3,20 +3,20 @@ package handlers
 import (
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
+	"github.com/streadway/amqp"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"used2book-backend/internal/models"
 	"used2book-backend/internal/services"
-	"github.com/streadway/amqp"
-	"time"
 )
 
 type UserHandler struct {
 	UserService   *services.UserService
 	UploadService *services.UploadService
-	RabbitMQConn *amqp.Connection
+	RabbitMQConn  *amqp.Connection
 }
 
 type CreatePaymentRequest struct {
@@ -46,7 +46,7 @@ func (uh *UserHandler) GetAllUsersHandler(w http.ResponseWriter, r *http.Request
 
 }
 
-func (uh * UserHandler) CreateBankAccountHandler(w http.ResponseWriter, r *http.Request) {
+func (uh *UserHandler) CreateBankAccountHandler(w http.ResponseWriter, r *http.Request) {
 	userID, ok := r.Context().Value("user_id").(int)
 	if !ok || userID == 0 {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -77,35 +77,75 @@ func (uh * UserHandler) CreateBankAccountHandler(w http.ResponseWriter, r *http.
 
 }
 
-func (uh * UserHandler) CreateBookRequestHandle(w http.ResponseWriter, r *http.Request) {
+func (uh *UserHandler) CreateBookRequestHandle(w http.ResponseWriter, r *http.Request) {
+	// Extract userID from context
 	userID, ok := r.Context().Value("user_id").(int)
 	if !ok || userID == 0 {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		sendErrorResponse(w, http.StatusUnauthorized, "Unauthorized: invalid or missing user ID")
 		return
 	}
 
 	// Parse request body
-	var req *models.BookRequest
-
+	var req models.BookRequest // Use non-pointer to avoid nil issues
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid request body: failed to parse JSON")
+		return
+	}
+
+	// Validate required fields
+	if req.Title == "" || req.ISBN == "" {
+		sendErrorResponse(w, http.StatusBadRequest, "Missing required fields: title and isbn are required")
 		return
 	}
 
 	req.UserID = userID
 
-	// Call service to update preferences
-	status, err := uh.UserService.CreateBookRequest(r.Context(), req)
+	// Call service to create book request
+	reqID, err := uh.UserService.CreateBookRequest(r.Context(), &req)
 	if err != nil {
-		sendErrorResponse(w, http.StatusInternalServerError, "Failed to update preferences",)
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to create book request: "+err.Error())
 		return
+	}
+	
+
+	ch, err := uh.RabbitMQConn.Channel()
+	if err != nil {
+		log.Println("❌ RabbitMQ Channel Error:", err)
+		return // Don’t fail webhook response
+	}
+	defer ch.Close()
+
+	q, err := ch.QueueDeclare(
+		"admin_queue", // New queue for payments
+		true, false, false, false, nil,
+	)
+	if err != nil {
+		log.Println("❌ Queue Declare Error:", err)
+		return
+	}
+	noti := map[string]interface{}{
+		"user_id":   userID,
+		"type":       "admin_request",
+		"related_id": strconv.Itoa(reqID),
+		"created_at": time.Now(),
+	}
+	body, _ := json.Marshal(noti)
+	err = ch.Publish(
+		"", q.Name, false, false,
+		amqp.Publishing{
+			ContentType: "application/json",
+			Body:        body,
+		},
+	)
+	if err != nil {
+		log.Println("❌ Publish Error:", err)
 	}
 
 	sendSuccessResponse(w, map[string]interface{}{
-		"success": status,
+		"success": true,
+		"message": "Book request created successfully",
 	})
-
 }
 
 func (uh *UserHandler) SetUserPreferredGenresHandler(w http.ResponseWriter, r *http.Request) {
@@ -140,8 +180,6 @@ func (uh *UserHandler) SetUserPreferredGenresHandler(w http.ResponseWriter, r *h
 	})
 }
 
-
-
 func (uh *UserHandler) GetUserPreferencesHandler(w http.ResponseWriter, r *http.Request) {
 	// Extract user ID from context (set by authentication middleware)
 	userID, ok := r.Context().Value("user_id").(int)
@@ -158,6 +196,19 @@ func (uh *UserHandler) GetUserPreferencesHandler(w http.ResponseWriter, r *http.
 
 	sendSuccessResponse(w, map[string]interface{}{
 		"preferred_genres": preferredGenres,
+	})
+}
+
+func (uh *UserHandler) GetBookRequestHandler(w http.ResponseWriter, r *http.Request) {
+
+	reqs, err := uh.UserService.GetBookRequests(r.Context())
+	if err != nil {
+		sendErrorResponse(w,  http.StatusInternalServerError, "Failed to retrieve user preferences"+err.Error())
+		return
+	}
+
+	sendSuccessResponse(w, map[string]interface{}{
+		"reqs": reqs,
 	})
 }
 
@@ -374,10 +425,11 @@ func (uh *UserHandler) EditProfileHandler(w http.ResponseWriter, r *http.Request
 	log.Println("address:", user.Address)
 	log.Println("quote:", user.Quote)
 	log.Println("bio:", user.Bio)
+	log.Println("phone:", user.PhoneNumber)
 
 
 	// 2. Check if user with same email already exists
-	err := uh.UserService.EditProfile(r.Context(), userID, user.FirstName, user.LastName, user.Address, user.Quote, user.Bio)
+	err := uh.UserService.EditProfile(r.Context(), userID, user.FirstName, user.LastName, user.Address, user.Quote, user.Bio, user.PhoneNumber)
 	if err != nil {
 		sendErrorResponse(w, http.StatusConflict, "Edit Preferrence "+err.Error()) // 409 Conflict if user exists
 		return
@@ -392,10 +444,10 @@ func (uh *UserHandler) EditProfileHandler(w http.ResponseWriter, r *http.Request
 
 func (uh *UserHandler) AddBookToLibraryHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		BookID int `json:"book_id"`
+		BookID        int `json:"book_id"`
 		ReadingStatus int `json:"reading_status"`
 	}
-	
+
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
 		return
@@ -404,79 +456,78 @@ func (uh *UserHandler) AddBookToLibraryHandler(w http.ResponseWriter, r *http.Re
 	log.Printf("Decoded request: %+v\n", req)
 
 	userID, ok := r.Context().Value("user_id").(int)
-    if !ok {
-        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
-        return
-    }
+	if !ok {
+		sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+		return
+	}
 
-    _ , err := uh.UserService.AddBookToLibrary(r.Context(), userID, req.BookID, req.ReadingStatus)
-    if err != nil {
-        sendErrorResponse(w, http.StatusConflict, "Failed to process book: "+err.Error())
-        return
-    }
+	_, err := uh.UserService.AddBookToLibrary(r.Context(), userID, req.BookID, req.ReadingStatus)
+	if err != nil {
+		sendErrorResponse(w, http.StatusConflict, "Failed to process book: "+err.Error())
+		return
+	}
 
-
-    sendSuccessResponse(w, map[string]interface{}{
-        "success": true,
-        "message": "add to library successfully",
-    })
+	sendSuccessResponse(w, map[string]interface{}{
+		"success": true,
+		"message": "add to library successfully",
+	})
 }
 
 func (uh *UserHandler) AddBookToListingHandler(w http.ResponseWriter, r *http.Request) {
-    // Parse multipart form (for JSON and files)
-    err := r.ParseMultipartForm(10 << 20) // 10MB max
-    if err != nil {
-        log.Println("Parse Form Error:", err)
-        sendErrorResponse(w, http.StatusBadRequest, "Invalid form data")
-        return
-    }
+	// Parse multipart form (for JSON and files)
+	err := r.ParseMultipartForm(10 << 20) // 10MB max
+	if err != nil {
+		log.Println("Parse Form Error:", err)
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid form data")
+		return
+	}
 
-    // Get JSON data from form field 'data'
-    jsonData := r.FormValue("data")
-    var user models.UserAddListingForm
-    if err := json.Unmarshal([]byte(jsonData), &user); err != nil {
-        log.Println("JSON Decode Error:", err)
-        sendErrorResponse(w, http.StatusBadRequest, "Invalid JSON format")
-        return
-    }
+	// Get JSON data from form field 'data'
+	jsonData := r.FormValue("data")
+	var user models.UserAddListingForm
+	if err := json.Unmarshal([]byte(jsonData), &user); err != nil {
+		log.Println("JSON Decode Error:", err)
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid JSON format")
+		return
+	}
 
-    userID, ok := r.Context().Value("user_id").(int)
-    if !ok {
-        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
-        return
-    }
+	userID, ok := r.Context().Value("user_id").(int)
+	if !ok {
+		sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+		return
+	}
 
-    files := r.MultipartForm.File["images"]
+	files := r.MultipartForm.File["images"]
 
-    var uploadURLs []string
-    if len(files) > 0 { // Only process images if provided
-        for _, handler := range files {
-            file, err := handler.Open()
-            if err != nil {
-                sendErrorResponse(w, http.StatusInternalServerError, "Error opening file")
-                return
-            }
-            defer file.Close()
+	var uploadURLs []string
+	if len(files) > 0 { // Only process images if provided
+		for _, handler := range files {
+			file, err := handler.Open()
+			if err != nil {
+				sendErrorResponse(w, http.StatusInternalServerError, "Error opening file")
+				return
+			}
+			defer file.Close()
 
-            url, err := uh.UploadService.UploadImageURL(file, handler.Filename)
-            if err != nil {
-                sendErrorResponse(w, http.StatusInternalServerError, "Image upload failed: "+err.Error())
-                return
-            }
-            uploadURLs = append(uploadURLs, url)
-        }
-    }
+			url, err := uh.UploadService.UploadImageURL(file, handler.Filename)
+			if err != nil {
+				sendErrorResponse(w, http.StatusInternalServerError, "Image upload failed: "+err.Error())
+				return
+			}
+			uploadURLs = append(uploadURLs, url)
+		}
+	}
 
-    _, err = uh.UserService.AddBookToListing(r.Context(), userID, user.BookID, user.Price, user.AllowOffer, uploadURLs, user.SellerNote, user.PhoneNumber)
-    if err != nil {
-        sendErrorResponse(w, http.StatusConflict, "Failed to process book: "+err.Error())
-        return
-    }
+	_, err = uh.UserService.AddBookToListing(r.Context(), userID, user.BookID, user.Price, user.AllowOffer, uploadURLs, user.SellerNote, user.PhoneNumber)
+	if err != nil {
+		sendErrorResponse(w, http.StatusConflict, "Failed to process book: "+err.Error())
+		return
+	}
 
-    sendSuccessResponse(w, map[string]interface{}{
-        "success": true,
-        "message": "Book listing added successfully!",
-    })
+	sendSuccessResponse(w, map[string]interface{}{
+		"success": true,
+		"message": "Book listing added successfully!",
+	})
 }
 func (uh *UserHandler) AddBookToWishListHandler(w http.ResponseWriter, r *http.Request) {
 	log.Println("📡 Incoming request: AddBookToWishListHandler")
@@ -600,8 +651,6 @@ func (uh *UserHandler) DeleteUserLibraryByIDHandler(w http.ResponseWriter, r *ht
 		"success": delete_status,
 	})
 }
-
-
 
 func (uh *UserHandler) GetAllListingsHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -839,11 +888,11 @@ func (uh *UserHandler) GetCartHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (uh *UserHandler) RemoveListingHandler(w http.ResponseWriter, r *http.Request) {
-    userID, ok := r.Context().Value("user_id").(int)
-    if !ok {
-        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
-        return
-    }
+	userID, ok := r.Context().Value("user_id").(int)
+	if !ok {
+		sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+		return
+	}
 
 	listingIDStr := chi.URLParam(r, "listingID")
 
@@ -854,16 +903,16 @@ func (uh *UserHandler) RemoveListingHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-    err = uh.UserService.RemoveListing(r.Context(), userID, listingID)
-    if err != nil {
-        sendErrorResponse(w, http.StatusBadRequest, err.Error())
-        return
-    }
+	err = uh.UserService.RemoveListing(r.Context(), userID, listingID)
+	if err != nil {
+		sendErrorResponse(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
-    sendSuccessResponse(w, map[string]interface{}{
-        "success": true,
-        "message": "Listing removed successfully",
-    })
+	sendSuccessResponse(w, map[string]interface{}{
+		"success": true,
+		"message": "Listing removed successfully",
+	})
 }
 
 func (uh *UserHandler) AddToCartHandler(w http.ResponseWriter, r *http.Request) {
@@ -932,29 +981,29 @@ func (uh *UserHandler) RemoveFromCartHandler(w http.ResponseWriter, r *http.Requ
 }
 
 func (uh *UserHandler) AddToOffersHandler(w http.ResponseWriter, r *http.Request) {
-    var req struct {
-        ListingID    int     `json:"listingId"`
-        OfferedPrice float64 `json:"offeredPrice"`
-    }
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        http.Error(w, "Invalid request", http.StatusBadRequest)
-        return
-    }
+	var req struct {
+		ListingID    int     `json:"listingId"`
+		OfferedPrice float64 `json:"offeredPrice"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
 
-    buyerID, ok := r.Context().Value("user_id").(int)
-    if !ok {
-        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
-        return
-    }
+	buyerID, ok := r.Context().Value("user_id").(int)
+	if !ok {
+		sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+		return
+	}
 
-    log.Println("listingID:", req.ListingID, "offeredPrice:", req.OfferedPrice)
+	log.Println("listingID:", req.ListingID, "offeredPrice:", req.OfferedPrice)
 
-    id, err := uh.UserService.AddToOffers(r.Context(), buyerID, req.ListingID, req.OfferedPrice)
-    if err != nil {
-        log.Println("❌ Add offer error:", err)
-        sendErrorResponse(w, http.StatusConflict, "Offer error: "+err.Error())
-        return
-    }
+	id, err := uh.UserService.AddToOffers(r.Context(), buyerID, req.ListingID, req.OfferedPrice)
+	if err != nil {
+		log.Println("❌ Add offer error:", err)
+		sendErrorResponse(w, http.StatusConflict, "Offer error: "+err.Error())
+		return
+	}
 
 	listing, err := uh.UserService.GetListingByID(r.Context(), req.ListingID)
 	if err != nil {
@@ -981,7 +1030,7 @@ func (uh *UserHandler) AddToOffersHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	noti := map[string]interface{}{
-		"user_id":   int(listing.SellerID),
+		"user_id":    int(listing.SellerID),
 		"type":       "offer",
 		"created_at": time.Now(),
 	}
@@ -999,97 +1048,96 @@ func (uh *UserHandler) AddToOffersHandler(w http.ResponseWriter, r *http.Request
 		log.Println("❌ Publish Error:", err)
 	}
 
-
-    log.Println("✅ Added offer successfully with ID:", id)
-    sendSuccessResponse(w, map[string]interface{}{
-        "success": true,
-        "message": "Offer added successfully!",
-        "offerId": id,
-    })
+	log.Println("✅ Added offer successfully with ID:", id)
+	sendSuccessResponse(w, map[string]interface{}{
+		"success": true,
+		"message": "Offer added successfully!",
+		"offerId": id,
+	})
 }
 
 func (uh *UserHandler) GetBuyerOffersHandler(w http.ResponseWriter, r *http.Request) {
-    buyerID := r.Context().Value("user_id").(int)
+	buyerID := r.Context().Value("user_id").(int)
 
-    offers, err := uh.UserService.GetBuyerOffers(r.Context(), buyerID)
-    if err != nil {
-        http.Error(w, "Failed to fetch user offers", http.StatusInternalServerError)
-        return
-    }
+	offers, err := uh.UserService.GetBuyerOffers(r.Context(), buyerID)
+	if err != nil {
+		http.Error(w, "Failed to fetch user offers", http.StatusInternalServerError)
+		return
+	}
 
-    sendSuccessResponse(w, map[string]interface{}{
-        "offers": offers,
-    })
+	sendSuccessResponse(w, map[string]interface{}{
+		"offers": offers,
+	})
 }
 
 func (uh *UserHandler) GetSellerOffersHandler(w http.ResponseWriter, r *http.Request) {
-    sellerID, ok := r.Context().Value("user_id").(int)
-    if !ok {
-        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
-        return
-    }
+	sellerID, ok := r.Context().Value("user_id").(int)
+	if !ok {
+		sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+		return
+	}
 
-    offers, err := uh.UserService.GetSellerOffers(r.Context(), sellerID)
-    if err != nil {
-        http.Error(w, "Failed to fetch seller offers", http.StatusInternalServerError)
-        return
-    }
+	offers, err := uh.UserService.GetSellerOffers(r.Context(), sellerID)
+	if err != nil {
+		http.Error(w, "Failed to fetch seller offers", http.StatusInternalServerError)
+		return
+	}
 
-    sendSuccessResponse(w, map[string]interface{}{
-        "offers": offers,
-    })
+	sendSuccessResponse(w, map[string]interface{}{
+		"offers": offers,
+	})
 }
 
 func (uh *UserHandler) RemoveFromOffersHandler(w http.ResponseWriter, r *http.Request) {
-    var req struct {
-        ListingID int `json:"listingId"`
-    }
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        http.Error(w, "Invalid request", http.StatusBadRequest)
-        return
-    }
+	var req struct {
+		ListingID int `json:"listingId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
 
-    buyerID, ok := r.Context().Value("user_id").(int)
-    if !ok {
-        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
-        return
-    }
+	buyerID, ok := r.Context().Value("user_id").(int)
+	if !ok {
+		sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+		return
+	}
 
-    err := uh.UserService.RemoveFromOffers(r.Context(), buyerID, req.ListingID)
-    if err != nil {
-        log.Println("❌ Remove offer error:", err)
-        sendErrorResponse(w, http.StatusConflict, "Offer error: "+err.Error())
-        return
-    }
+	err := uh.UserService.RemoveFromOffers(r.Context(), buyerID, req.ListingID)
+	if err != nil {
+		log.Println("❌ Remove offer error:", err)
+		sendErrorResponse(w, http.StatusConflict, "Offer error: "+err.Error())
+		return
+	}
 
-    log.Println("✅ Offer removed successfully")
-    sendSuccessResponse(w, map[string]interface{}{
-        "success": true,
-        "message": "Offer removed successfully!",
-    })
+	log.Println("✅ Offer removed successfully")
+	sendSuccessResponse(w, map[string]interface{}{
+		"success": true,
+		"message": "Offer removed successfully!",
+	})
 }
 
 func (uh *UserHandler) AcceptOfferHandler(w http.ResponseWriter, r *http.Request) {
-    var req struct {
-        OfferID int `json:"offerId"`
-    }
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        http.Error(w, "Invalid request", http.StatusBadRequest)
-        return
-    }
+	var req struct {
+		OfferID int `json:"offerId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
 
-    sellerID, ok := r.Context().Value("user_id").(int)
-    if !ok {
-        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
-        return
-    }
+	sellerID, ok := r.Context().Value("user_id").(int)
+	if !ok {
+		sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+		return
+	}
 
-    buyer_id, err := uh.UserService.AcceptOffer(r.Context(), sellerID, req.OfferID)
-    if err != nil {
-        log.Println("❌ Accept offer error:", err)
-        sendErrorResponse(w, http.StatusConflict, "Offer error: "+err.Error())
-        return
-    }
+	buyer_id, err := uh.UserService.AcceptOffer(r.Context(), sellerID, req.OfferID)
+	if err != nil {
+		log.Println("❌ Accept offer error:", err)
+		sendErrorResponse(w, http.StatusConflict, "Offer error: "+err.Error())
+		return
+	}
 
 	ch, err := uh.RabbitMQConn.Channel()
 	if err != nil {
@@ -1108,8 +1156,8 @@ func (uh *UserHandler) AcceptOfferHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	noti := map[string]interface{}{
-		"user_id":  buyer_id,
-		"type":      "offer",
+		"user_id":    buyer_id,
+		"type":       "offer",
 		"created_at": time.Now(),
 	}
 
@@ -1126,35 +1174,33 @@ func (uh *UserHandler) AcceptOfferHandler(w http.ResponseWriter, r *http.Request
 		log.Println("❌ Publish Error:", err)
 	}
 
-
-
-    sendSuccessResponse(w, map[string]interface{}{
-        "success": true,
-        "message": "Offer accepted successfully!",
-    })
+	sendSuccessResponse(w, map[string]interface{}{
+		"success": true,
+		"message": "Offer accepted successfully!",
+	})
 }
 
 func (uh *UserHandler) RejectOfferHandler(w http.ResponseWriter, r *http.Request) {
-    var req struct {
-        OfferID int `json:"offerId"`
-    }
-    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-        http.Error(w, "Invalid request", http.StatusBadRequest)
-        return
-    }
+	var req struct {
+		OfferID int `json:"offerId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
 
-    sellerID, ok := r.Context().Value("user_id").(int)
-    if !ok {
-        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
-        return
-    }
+	sellerID, ok := r.Context().Value("user_id").(int)
+	if !ok {
+		sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+		return
+	}
 
-    buyer_id, err := uh.UserService.RejectOffer(r.Context(), sellerID, req.OfferID)
-    if err != nil {
-        log.Println("❌ Reject offer error:", err)
-        sendErrorResponse(w, http.StatusConflict, "Offer error: "+err.Error())
-        return
-    }
+	buyer_id, err := uh.UserService.RejectOffer(r.Context(), sellerID, req.OfferID)
+	if err != nil {
+		log.Println("❌ Reject offer error:", err)
+		sendErrorResponse(w, http.StatusConflict, "Offer error: "+err.Error())
+		return
+	}
 
 	ch, err := uh.RabbitMQConn.Channel()
 	if err != nil {
@@ -1173,8 +1219,8 @@ func (uh *UserHandler) RejectOfferHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	noti := map[string]interface{}{
-		"user_id":  buyer_id,
-		"type":      "offer",
+		"user_id":    buyer_id,
+		"type":       "offer",
 		"created_at": time.Now(),
 	}
 
@@ -1191,20 +1237,20 @@ func (uh *UserHandler) RejectOfferHandler(w http.ResponseWriter, r *http.Request
 		log.Println("❌ Publish Error:", err)
 	}
 
-    sendSuccessResponse(w, map[string]interface{}{
-        "success": true,
-        "message": "Offer rejected successfully!",
-    })
+	sendSuccessResponse(w, map[string]interface{}{
+		"success": true,
+		"message": "Offer rejected successfully!",
+	})
 }
 
 // handler/user_handler.go
 func (uh *UserHandler) GetAcceptedOfferHandler(w http.ResponseWriter, r *http.Request) {
-    // offerIDStr := r.URL.Path[len("/offers/") : strings.Index(r.URL.Path, "/payment")]
-    // offerID, err := strconv.Atoi(offerIDStr)
-    // if err != nil {
-    //     sendErrorResponse(w, http.StatusBadRequest, "Invalid offer ID")
-    //     return
-    // }
+	// offerIDStr := r.URL.Path[len("/offers/") : strings.Index(r.URL.Path, "/payment")]
+	// offerID, err := strconv.Atoi(offerIDStr)
+	// if err != nil {
+	//     sendErrorResponse(w, http.StatusBadRequest, "Invalid offer ID")
+	//     return
+	// }
 	offerIDStr := chi.URLParam(r, "offerID")
 
 	offerID, err := strconv.Atoi(offerIDStr) // Convert to int
@@ -1214,26 +1260,26 @@ func (uh *UserHandler) GetAcceptedOfferHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-    buyerID, ok := r.Context().Value("user_id").(int)
-    if !ok {
-        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
-        return
-    }
+	buyerID, ok := r.Context().Value("user_id").(int)
+	if !ok {
+		sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+		return
+	}
 
-    offer, err := uh.UserService.GetAcceptedOffer(r.Context(), offerID)
-    if err != nil {
-        sendErrorResponse(w, http.StatusNotFound, "Offer not found or not accepted")
-        return
-    }
+	offer, err := uh.UserService.GetAcceptedOffer(r.Context(), offerID)
+	if err != nil {
+		sendErrorResponse(w, http.StatusNotFound, "Offer not found or not accepted")
+		return
+	}
 
-    if offer.BuyerID != buyerID {
-        sendErrorResponse(w, http.StatusForbidden, "You are not the buyer of this offer")
-        return
-    }
+	if offer.BuyerID != buyerID {
+		sendErrorResponse(w, http.StatusForbidden, "You are not the buyer of this offer")
+		return
+	}
 
-    sendSuccessResponse(w, map[string]interface{}{
-        "offer": offer,
-    })
+	sendSuccessResponse(w, map[string]interface{}{
+		"offer": offer,
+	})
 }
 
 func (uh *UserHandler) UploadPostImagesHandler(w http.ResponseWriter, r *http.Request) {
@@ -1332,73 +1378,73 @@ func (uh *UserHandler) GetAllUserPreferred(w http.ResponseWriter, r *http.Reques
 
 // handler/user_handler.go
 func (uh *UserHandler) CreatePostHandler(w http.ResponseWriter, r *http.Request) {
-    // Parse multipart form (10MB max)
-    err := r.ParseMultipartForm(10 << 20)
-    if err != nil {
-        log.Println("Parse Form Error:", err)
-        sendErrorResponse(w, http.StatusBadRequest, "Invalid form data")
-        return
-    }
+	// Parse multipart form (10MB max)
+	err := r.ParseMultipartForm(10 << 20)
+	if err != nil {
+		log.Println("Parse Form Error:", err)
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid form data")
+		return
+	}
 
-    // Log the form data for debugging
-    log.Println("Form Data:", r.Form)
+	// Log the form data for debugging
+	log.Println("Form Data:", r.Form)
 
-    // Get content
-    content := r.FormValue("content")
-    if content == "" {
-        sendErrorResponse(w, http.StatusBadRequest, "Content is required")
-        return
-    }
+	// Get content
+	content := r.FormValue("content")
+	if content == "" {
+		sendErrorResponse(w, http.StatusBadRequest, "Content is required")
+		return
+	}
 
-    // Get image URLs (optional, from form field)
-    imageURLs := r.Form["image_urls"] // Multiple values if sent as array
+	// Get image URLs (optional, from form field)
+	imageURLs := r.Form["image_urls"] // Multiple values if sent as array
 
-    // Get genre_id and book_id (optional)
-    var genreID *int
-    var bookID *int
-    if genreStr := r.FormValue("genre_id"); genreStr != "" {
-        id, err := strconv.Atoi(genreStr)
-        if err != nil {
-            sendErrorResponse(w, http.StatusBadRequest, "Invalid genre_id")
-            return
-        }
-        genreID = &id
-    }
-    if bookStr := r.FormValue("book_id"); bookStr != "" {
-        id, err := strconv.Atoi(bookStr)
-        if err != nil {
-            sendErrorResponse(w, http.StatusBadRequest, "Invalid book_id")
-            return
-        }
-        bookID = &id
-    }
+	// Get genre_id and book_id (optional)
+	var genreID *int
+	var bookID *int
+	if genreStr := r.FormValue("genre_id"); genreStr != "" {
+		id, err := strconv.Atoi(genreStr)
+		if err != nil {
+			sendErrorResponse(w, http.StatusBadRequest, "Invalid genre_id")
+			return
+		}
+		genreID = &id
+	}
+	if bookStr := r.FormValue("book_id"); bookStr != "" {
+		id, err := strconv.Atoi(bookStr)
+		if err != nil {
+			sendErrorResponse(w, http.StatusBadRequest, "Invalid book_id")
+			return
+		}
+		bookID = &id
+	}
 
-    // Enforce 1-to-1 relationship: only one of genre_id or book_id can be non-null
-    if genreID != nil && bookID != nil {
-        sendErrorResponse(w, http.StatusBadRequest, "Post can only reference either a genre OR a book, not both")
-        return
-    }
+	// Enforce 1-to-1 relationship: only one of genre_id or book_id can be non-null
+	if genreID != nil && bookID != nil {
+		sendErrorResponse(w, http.StatusBadRequest, "Post can only reference either a genre OR a book, not both")
+		return
+	}
 
-    // Get userID from context
-    userID, ok := r.Context().Value("user_id").(int)
-    if !ok {
-        sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
-        return
-    }
+	// Get userID from context
+	userID, ok := r.Context().Value("user_id").(int)
+	if !ok {
+		sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
+		return
+	}
 
-    // Create post
-    post, err := uh.UserService.CreatePost(r.Context(), userID, content, imageURLs, genreID, bookID)
-    if err != nil {
-        sendErrorResponse(w, http.StatusInternalServerError, "Failed to create post: "+err.Error())
-        return
-    }
+	// Create post
+	post, err := uh.UserService.CreatePost(r.Context(), userID, content, imageURLs, genreID, bookID)
+	if err != nil {
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to create post: "+err.Error())
+		return
+	}
 
-    // Send success response with the created post
-    sendSuccessResponse(w, map[string]interface{}{
-        "success": true,
-        "message": "Post created successfully!",
-        "post":    post,
-    })
+	// Send success response with the created post
+	sendSuccessResponse(w, map[string]interface{}{
+		"success": true,
+		"message": "Post created successfully!",
+		"post":    post,
+	})
 }
 
 // GetAllPostsHandler returns all posts
@@ -1418,25 +1464,26 @@ func (uh *UserHandler) GetAllPostsHandler(w http.ResponseWriter, r *http.Request
 // GetPostsByUserIDHandler returns posts for a specific user
 // handler/user_handler.go
 func (uh *UserHandler) GetPostsByUserIDHandler(w http.ResponseWriter, r *http.Request) {
-    userIDStr := chi.URLParam(r, "userID")
-    userID, err := strconv.Atoi(userIDStr) // Convert to int
-    log.Println("userID: ", userID)
-    if err != nil {
-        sendErrorResponse(w, http.StatusBadRequest, "Invalid user ID")
-        return
-    }
+	userIDStr := chi.URLParam(r, "userID")
+	userID, err := strconv.Atoi(userIDStr) // Convert to int
+	log.Println("userID: ", userID)
+	if err != nil {
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid user ID")
+		return
+	}
 
-    posts, err := uh.UserService.GetPostsByUserID(r.Context(), userID)
-    if err != nil {
-        sendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch posts: "+err.Error())
-        return
-    }
+	posts, err := uh.UserService.GetPostsByUserID(r.Context(), userID)
+	if err != nil {
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to fetch posts: "+err.Error())
+		return
+	}
 
-    sendSuccessResponse(w, map[string]interface{}{
-        "success": true,
-        "posts":   posts,
-    })
+	sendSuccessResponse(w, map[string]interface{}{
+		"success": true,
+		"posts":   posts,
+	})
 }
+
 // GetPostByPostIDHandler returns a single post by its ID
 func (uh *UserHandler) GetPostByPostIDHandler(w http.ResponseWriter, r *http.Request) {
 	postIDStr := r.URL.Query().Get("post_id") // Assume passed as query param

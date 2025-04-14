@@ -193,24 +193,34 @@ func (bh *BookHandler) GetReviewsByBookIDHandler(w http.ResponseWriter, r *http.
 	
 }
 
-// // GetBookWithRatings retrieves a book and its ratings
-// func (bh *BookHandler) GetBookWithRatings(w http.ResponseWriter, r *http.Request) {
-// 	vars := mux.Vars(r)
-// 	bookID, err := strconv.Atoi(vars["id"])
-// 	if err != nil {
-// 		http.Error(w, "Invalid book ID", http.StatusBadRequest)
-// 		return
-// 	}
+func (bh *BookHandler) GetReviewsByUserIDHandler(w http.ResponseWriter, r *http.Request) {
+	
+	body, _ := io.ReadAll(r.Body)
+	log.Println("Request Body:", string(body)) 
 
-// 	book, err := bh.BookService.GetBookWithRatings(context.Background(), bookID)
-// 	if err != nil {
-// 		http.Error(w, "Error fetching book", http.StatusInternalServerError)
-// 		return
-// 	}
+	userIDStr := chi.URLParam(r, "userID")
+	log.Println("userIDStr:", userIDStr)
 
-// 	w.Header().Set("Content-Type", "application/json")
-// 	json.NewEncoder(w).Encode(book)
-// }
+	if userIDStr == "" {
+		sendErrorResponse(w, http.StatusBadRequest, "Book ID is required")
+		return
+	}
+
+	userID, err := strconv.Atoi(userIDStr)
+
+	// Call the BookService method to get the total book count
+	reviews, err := bh.BookService.GetReviewsByUserID(r.Context(), userID)
+	if err != nil {
+		sendErrorResponse(w, http.StatusInternalServerError, "Failed to get reviews"+err.Error())
+		return
+	}
+
+	sendSuccessResponse(w, map[string]interface{}{
+		"reviews": reviews,
+	})
+	
+}
+
 
 func (bh *BookHandler) GetBookByID(w http.ResponseWriter, r *http.Request) {
 	// Use chi's URLParam to get the 'id' parameter
@@ -306,57 +316,6 @@ func (bh *BookHandler) GetGenresByBookID(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-
-
-// // AddOrUpdateUserRating allows a user to add or update their rating
-// func (bh *BookHandler) AddOrUpdateUserRating(w http.ResponseWriter, r *http.Request) {
-// 	vars := mux.Vars(r)
-// 	bookID, err := strconv.Atoi(vars["id"])
-// 	if err != nil {
-// 		http.Error(w, "Invalid book ID", http.StatusBadRequest)
-// 		return
-// 	}
-
-// 	userID := r.Context().Value("user_id").(int) // Assume User-ID is passed in header
-// 	var payload struct {
-// 		Rating float64 `json:"rating"`
-// 	}
-
-// 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-// 		http.Error(w, "Invalid request body", http.StatusBadRequest)
-// 		return
-// 	}
-
-// 	err = bh.BookService.AddOrUpdateUserRating(context.Background(), userID, bookID, payload.Rating)
-// 	if err != nil {
-// 		http.Error(w, "Error updating rating", http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	w.WriteHeader(http.StatusOK)
-// 	w.Write([]byte(`{"message": "Rating updated successfully"}`))
-// }
-
-// // DeleteUserRating allows a user to delete their rating
-// func (bh *BookHandler) DeleteUserRating(w http.ResponseWriter, r *http.Request) {
-// 	vars := mux.Vars(r)
-// 	bookID, err := strconv.Atoi(vars["id"])
-// 	if err != nil {
-// 		http.Error(w, "Invalid book ID", http.StatusBadRequest)
-// 		return
-// 	}
-
-// 	userID := r.Context().Value("user_id").(int) // Assume User-ID is passed in header
-
-// 	err = bh.BookService.DeleteUserRating(context.Background(), userID, bookID)
-// 	if err != nil {
-// 		http.Error(w, "Error deleting rating", http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	w.WriteHeader(http.StatusOK)
-// 	w.Write([]byte(`{"message": "Rating deleted successfully"}`))
-// }
 
 // SyncBooksFromGoogleSheets triggers syncing books from Google Sheets
 func (bh *BookHandler) SyncBooksFromGoogleSheets(w http.ResponseWriter, r *http.Request) {

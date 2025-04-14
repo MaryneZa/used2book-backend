@@ -122,6 +122,9 @@ func UserRoutes(db *sql.DB, rabbitConn *amqp.Connection) http.Handler {
 	
 	r.With(middleware.AuthMiddleware).Post("/delete-user-library/{id:[0-9]+}", userHandler.DeleteUserLibraryByIDHandler) 
 
+	r.With(middleware.AuthMiddleware).Post("/book-request", userHandler.CreateBookRequestHandle) 
+
+	r.With(middleware.AuthMiddleware).Get("/book-request", userHandler.GetBookRequestHandler) 
 
 	// r.Get("/post", uh.GetPostByPostIDHandler) // e.g., /post?post_id=1
 

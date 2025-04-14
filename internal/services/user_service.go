@@ -63,8 +63,8 @@ func (us *UserService) EditName(ctx context.Context, userID int, firstName strin
 	return us.userRepo.EditName(ctx, userID, firstName, lastName)
 }
 
-func (us *UserService) EditProfile(ctx context.Context, userID int, first_name string, last_name string, address string, quote string, bio string) error {
-	return us.userRepo.EditProfile(ctx, userID, first_name, last_name, address, quote, bio)
+func (us *UserService) EditProfile(ctx context.Context, userID int, first_name string, last_name string, address string, quote string, bio string, phone_number string) error {
+	return us.userRepo.EditProfile(ctx, userID, first_name, last_name, address, quote, bio, phone_number)
 }
 
 
@@ -287,10 +287,12 @@ func (us *UserService) DeleteUserLibraryByID(ctx context.Context, bookID int) (b
     return us.userRepo.DeleteUserLibraryByID(ctx, bookID)
 }
 
-func (us *UserService) CreateBookRequest(ctx context.Context, req *models.BookRequest) (bool, error) {
+func (us *UserService) CreateBookRequest(ctx context.Context, req *models.BookRequest) (int, error) {
     return us.userRepo.CreateBookRequest(ctx, req)
 }
 
-
+func (us *UserService) GetBookRequests(ctx context.Context) ([]*models.BookRequest, error) {
+	return us.userRepo.GetBookRequests(ctx)
+}
 
 

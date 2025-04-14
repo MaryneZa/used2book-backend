@@ -25,7 +25,7 @@ func RunMigrations() {
             provider ENUM('google','local') NOT NULL,
             
             hashed_password VARCHAR(255),
-            phone_number VARCHAR(20) DEFAULT NULL UNIQUE,
+            phone_number VARCHAR(20) DEFAULT '',
 
             picture_profile VARCHAR(255) DEFAULT '',
             picture_background VARCHAR(255) DEFAULT '',
@@ -134,6 +134,7 @@ func RunMigrations() {
             reserved_expires_at TIMESTAMP NULL DEFAULT NULL,
             allow_offers BOOLEAN DEFAULT FALSE,
             seller_note TEXT,
+            phone_number VARCHAR(20) NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (seller_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -281,6 +282,18 @@ func RunMigrations() {
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (genre_id) REFERENCES genres(id) ON DELETE CASCADE
+        );`,
+
+        `CREATE TABLE IF NOT EXISTS book_requests (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            title VARCHAR(255) NOT NULL,
+            isbn VARCHAR(20) NOT NULL,
+            note VARCHAR(255) DEFAULT '',
+            status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );`,
 		// // Seller Reviews table
 		// `CREATE TABLE IF NOT EXISTS seller_reviews (

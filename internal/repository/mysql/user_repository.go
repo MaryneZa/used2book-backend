@@ -106,6 +106,57 @@ func (ur *UserRepository) FindByEmail(ctx context.Context, email string) (*model
 	return &user, nil
 }
 
+// src/repository/user_repository.go
+func (ur *UserRepository) GetBookRequests(ctx context.Context) ([]*models.BookRequest, error) {
+    var requests []*models.BookRequest
+    query := `
+        SELECT 
+            br.id, 
+            br.user_id, 
+            br.title, 
+            br.isbn, 
+            br.note, 
+			br.created_at,
+            u.first_name, 
+            u.last_name, 
+            u.email, 
+            u.picture_profile
+        FROM book_requests br
+        JOIN users u ON br.user_id = u.id
+        ORDER BY br.created_at DESC`
+
+    rows, err := ur.db.QueryContext(ctx, query)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    for rows.Next() {
+        var req models.BookRequest
+        err := rows.Scan(
+            &req.ID,
+            &req.UserID,
+            &req.Title,
+            &req.ISBN,
+            &req.Note,
+			&req.CreatedAt,
+            &req.UserFirstName,
+            &req.UserLastName,
+            &req.UserEmail,
+            &req.UserPictureProfile,
+        )
+        if err != nil {
+            return nil, err
+        }
+        requests = append(requests, &req)
+    }
+
+    if err = rows.Err(); err != nil {
+        return nil, err
+    }
+
+    return requests, nil
+}
 func (ur *UserRepository) CreateBankAccount(ctx context.Context, bank *models.BankAccount) (int, error) {
 	query := `
 		INSERT INTO bank_accounts (user_id, bank_name, account_number, account_holder_name, created_at, updated_at)
@@ -126,21 +177,24 @@ func (ur *UserRepository) CreateBankAccount(ctx context.Context, bank *models.Ba
 	return int(id), nil
 }
 
-func (ur *UserRepository) CreateBookRequest(ctx context.Context, req *models.BookRequest) (bool, error) {
+func (ur *UserRepository) CreateBookRequest(ctx context.Context, req *models.BookRequest) (int, error) {
 	query := `
-		INSERT INTO books_request (user_id, title, isbn, note, created_at, updated_at)
+		INSERT INTO book_requests (user_id, title, isbn, note, created_at, updated_at)
 		VALUES (?, ?, ?, ?, NOW(), NOW())
 	`
 
-	_, err := ur.db.ExecContext(ctx, query, req.UserID, req.Title, req.ISBN, req.Note)
+	result, err := ur.db.ExecContext(ctx, query, req.UserID, req.Title, req.ISBN, req.Note)
 	if err != nil {
-		return false, err
+		return 0, err
 	}
-
-
-	log.Println("✅ create book request successfully !")
 	
-	return true, nil
+	log.Println("✅ create book request successfully !")
+
+	ID, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return int(ID), nil
 }
 
 
@@ -578,7 +632,7 @@ func (ur *UserRepository) EditName(ctx context.Context, userID int, firstName st
 	return nil
 }
 
-func (ur *UserRepository) EditProfile(ctx context.Context, userID int, first_name string, last_name string, address string, quote string, bio string) error {
+func (ur *UserRepository) EditProfile(ctx context.Context, userID int, first_name string, last_name string, address string, quote string, bio string, phone_number string) error {
 	query := `
 		UPDATE users
 		SET
@@ -587,10 +641,11 @@ func (ur *UserRepository) EditProfile(ctx context.Context, userID int, first_nam
 		address = COALESCE(?, address),
 		quote = COALESCE(?, quote), 
 		bio = COALESCE(?, bio),
+		phone_number = COALESCE(?, phone_number),
 		updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?
 		`
-	_, err := ur.db.ExecContext(ctx, query, first_name, last_name, address, quote, bio, userID)
+	_, err := ur.db.ExecContext(ctx, query, first_name, last_name, address, quote, bio, phone_number, userID)
 	if err != nil {
 		return err
 	}

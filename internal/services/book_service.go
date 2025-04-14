@@ -81,6 +81,10 @@ func (bs *BookService) GetReviewsByBookID(ctx context.Context, bookID int) ([]mo
 	return bs.bookRepo.GetReviewsByBookID(ctx, bookID)
 }
 
+func (bs *BookService) GetReviewsByUserID(ctx context.Context, bookID int) ([]models.BookReview, error) {
+	return bs.bookRepo.GetReviewsByUserID(ctx, bookID)
+}
+
 func (bs *BookService) GetAllGenres(ctx context.Context) ([]models.Genre, error) {
 	return bs.bookRepo.GetAllGenres(ctx)
 }

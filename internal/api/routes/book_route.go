@@ -55,6 +55,7 @@ func BookRoutes(db *sql.DB) http.Handler {
 	r.With(middleware.AuthMiddleware).Get("/{id:[0-9]+}/listings", bookHandler.GetAllListingsByBookID)
 	r.With(middleware.AuthMiddleware).Get("/{id:[0-9]+}/get-reviews", bookHandler.GetReviewsByBookIDHandler)
 
+	r.With(middleware.AuthMiddleware).Get("/get-reviews/{userID:[0-9]+}", bookHandler.GetReviewsByUserIDHandler)
 
 	r.With(middleware.AuthMiddleware).Post("/add-review", bookHandler.AddBookReviewHandler)
 	

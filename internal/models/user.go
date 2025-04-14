@@ -15,7 +15,7 @@ type User struct {
 	FirstName         string         `json:"first_name,omitempty" db:"first_name"`
 	LastName          string         `json:"last_name,omitempty" db:"last_name"`
 	Address          string         `json:"address,omitempty" db:"address"`
-	PhoneNumber       sql.NullString `json:"phone_number" db:"phone_number"`
+	PhoneNumber       string `json:"phone_number" db:"phone_number"`
 	Quote             string         `json:"quote" db:"quote"`
 	Bio               string         `json:"bio" db:"bio"`
 	Gender            string         `json:"gender" db:"gender"`
@@ -43,7 +43,7 @@ type GetMe struct {
 	LastName          string         `json:"last_name,omitempty" db:"last_name"`
 	ProfilePicture    string         `json:"picture_profile" db:"picture_profile"`
 	BackgroundPicture string         `json:"picture_background" db:"picture_background"`
-	PhoneNumber       sql.NullString `json:"phone_number" db:"phone_number"`
+	PhoneNumber       string `json:"phone_number" db:"phone_number"`
 	Gender            string         `json:"gender" db:"gender"`
 	Quote             string         `json:"quote" db:"quote"`
 	Bio               string         `json:"bio" db:"bio"`
@@ -61,10 +61,16 @@ type WishlistUser struct {
 }
 
 type BookRequest struct {
-	UserID        int    `json:"user_id" db:"user_id"`
-	Title         string    `json:"title" db:"title"`
-    ISBN          string    `json:"isbn,omitempty" db:"isbn"`
-	Note 		  string    `json:"note,omitempty" db:"note"`
+	ID              int    `json:"id"`
+	UserID          int    `json:"user_id"`
+	Title           string `json:"title"`
+	ISBN            string `json:"isbn"`
+	Note            string `json:"note"`
+	UserFirstName   string `json:"user_first_name"`
+	UserLastName    string `json:"user_last_name"`
+	UserEmail       string `json:"user_email"`
+	UserPictureProfile string `json:"user_picture_profile"`
+    CreatedAt     time.Time `json:"created_at,omitempty" db:"created_at"`
 }
 
 
@@ -75,7 +81,7 @@ type GetAllUsers struct {
 	LastName          string         `json:"last_name,omitempty" db:"last_name"`
 	ProfilePicture    string         `json:"picture_profile" db:"picture_profile"`
 	BackgroundPicture string         `json:"picture_background" db:"picture_background"`
-	PhoneNumber       sql.NullString `json:"phone_number" db:"phone_number"`
+	PhoneNumber       string `json:"phone_number" db:"phone_number"`
 	Gender            string         `json:"gender" db:"gender"`
 	Quote             string         `json:"quote" db:"quote"`
 	Bio               string         `json:"bio" db:"bio"`
