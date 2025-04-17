@@ -52,6 +52,7 @@ func (ph *PaymentHandler) CheckOutHandler(w http.ResponseWriter, r *http.Request
 	var amount float64
 	var listing *models.ListingDetails
 	var offerID *int
+	var offer *models.OfferItem
 
 	listing, err := ph.UserService.GetListingByID(r.Context(), req.ListingID)
 	if err != nil || listing == nil {
@@ -60,11 +61,12 @@ func (ph *PaymentHandler) CheckOutHandler(w http.ResponseWriter, r *http.Request
 	}
 
 	if req.OfferID != 0 {
-		offer, err := ph.UserService.GetOfferByID(r.Context(), req.OfferID)
+		offer, err = ph.UserService.GetOfferByID(r.Context(), req.OfferID)
 		if err != nil {
 			sendErrorResponse(w, http.StatusNotFound, "Offer not found")
 			return
 		}
+		log.Printf("offer buyerID: %d, req buyerID: %d", offer.BuyerID, req.BuyerID)
 		if offer.BuyerID != req.BuyerID {
 			sendErrorResponse(w, http.StatusForbidden, "You are not the buyer of this offer")
 			return
@@ -277,9 +279,10 @@ func (ph *PaymentHandler) WebhookHandler(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
+
 		listing, err := ph.UserService.GetListingByID(r.Context(), listingID)
 		if err != nil || listing == nil {
-			sendErrorResponse(w, http.StatusNotFound, "Listing not found")
+			sendErrorResponse(w, http.StatusNotFound, "Listing not found"+err.Error())
 			return
 		}
 

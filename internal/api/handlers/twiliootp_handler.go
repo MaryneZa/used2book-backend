@@ -44,21 +44,6 @@ func (th *TwilioOTPHandler) SendOTPHandler(w http.ResponseWriter, r *http.Reques
 	// ✅ Log incoming request
 	log.Println("📞 Request to send OTP for phone:", req.PhoneNumber)
 
-	// taken, err := th.UserService.IsPhoneNumberTaken(ctx, req.PhoneNumber)
-	// if err != nil {
-	// 	log.Println("Error checking phone number:", err)
-	// 	sendErrorResponse(w, http.StatusInternalServerError, "phone number internal server error: "+err.Error())
-	// 	return
-	// }
-
-	// if taken {
-	// 	log.Println("Phone number already registered:", req.PhoneNumber)
-	// 	sendErrorResponse(w, http.StatusConflict, "phone number already registered")
-	// 	return
-	// }
-
-
-	// ✅ Send OTP and log response
 	err := twiliootp.SendOTP(ctx, req.PhoneNumber)
 	if err != nil {
 		log.Println("❌ Error sending OTP:", err)

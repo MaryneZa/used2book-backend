@@ -2,7 +2,6 @@ package models
 
 import (
 	"time"
-	"database/sql"
 )
 
 type CartItem struct {
@@ -90,7 +89,7 @@ type MyOrder struct {
 	BuyerID           int     `json:"buyer_id"`
 	BuyerFirstName    string  `json:"buyer_first_name"`
 	BuyerLastName     string  `json:"buyer_last_name"`
-	BuyerPhone        sql.NullString  `json:"buyer_phone"`
+	BuyerPhone        string  `json:"buyer_phone"`
 	BuyerAddress      string  `json:"buyer_address"`
 	BuyerProfileImage string  `json:"buyer_profile_image"`
 

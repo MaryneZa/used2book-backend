@@ -43,10 +43,9 @@ func (ah * AuthHandler) VerifyTokenHandler(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// Post
+
 func (ah *AuthHandler) SignupEmailHandler(w http.ResponseWriter, r *http.Request) {
 
-	// 1. Parse JSON body for email, password, name, etc.
 	var user models.AuthUser
 
 	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
@@ -56,14 +55,12 @@ func (ah *AuthHandler) SignupEmailHandler(w http.ResponseWriter, r *http.Request
 
 	user.Provider = "local"
 
-	// 2. Check if user with same email already exists
 	_, err := ah.AuthService.Signup(r.Context(), user)
 	if err != nil {
 		sendErrorResponse(w, http.StatusConflict, "Signup failed: "+err.Error()) // 409 Conflict if user exists
 		return
 	}
 
-	// Step 3: Success Response
 	sendSuccessResponse(w, map[string]interface{}{
 		"success": true,
 		"message": "Sign up successfully!",
@@ -165,9 +162,6 @@ func (ah *AuthHandler) GoogleCallbackHandler(w http.ResponseWriter, r *http.Requ
 
 func (ah *AuthHandler) processOAuthCallback(config *oauth2.Config, code string) (*models.AuthUser, error) {
 
-	// Exchange the code for a token
-	// log.Printf("Authorization code: %s", code)
-	// log.Printf("Redirect URI: %s", config.RedirectURL)
 
 	token, err := config.Exchange(context.Background(), code)
 	if err != nil {

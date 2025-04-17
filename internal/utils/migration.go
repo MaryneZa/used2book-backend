@@ -206,8 +206,8 @@ func RunMigrations() {
             id INT AUTO_INCREMENT PRIMARY KEY,
             user_id INT NOT NULL,
             content TEXT NOT NULL,
-            genre_id INT DEFAULT NULL,  -- Optional link to genres
-            book_id INT DEFAULT NULL,   -- Optional link to books
+            genre_id INT DEFAULT NULL,  
+            book_id INT DEFAULT NULL,   
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -244,17 +244,8 @@ func RunMigrations() {
                 UNIQUE KEY unique_like (post_id, user_id) -- Ensures one like per user per post
             );`,
 
-		// Notifications table
-		`CREATE TABLE IF NOT EXISTS notifications (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-            user_id INT NOT NULL,
-            message VARCHAR(255),
-            is_read BOOLEAN DEFAULT false,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-            );`,
-
-
+            
+            
 		// Book genres table (Pivot)
 		`CREATE TABLE IF NOT EXISTS book_genres (
                 id INT AUTO_INCREMENT PRIMARY KEY,
@@ -309,17 +300,26 @@ func RunMigrations() {
 		// );`,
 		// // Recommendations table
 		// `CREATE TABLE IF NOT EXISTS recommendations (
-		//     id INT AUTO_INCREMENT PRIMARY KEY,
-		//     user_id INT NOT NULL,
-		//     book_id INT NOT NULL,
-		//     score DECIMAL(5,2) NOT NULL,
-		//     generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		//     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-		//     FOREIGN KEY (book_id) REFERENCES books(id)
-		//     );`,
-	}
-
-	for _, query := range queries {
+            //     id INT AUTO_INCREMENT PRIMARY KEY,
+            //     user_id INT NOT NULL,
+            //     book_id INT NOT NULL,
+            //     score DECIMAL(5,2) NOT NULL,
+            //     generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            //     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            //     FOREIGN KEY (book_id) REFERENCES books(id)
+            //     );`,
+            // // Notifications table
+            // `CREATE TABLE IF NOT EXISTS notifications (
+            //         id INT AUTO_INCREMENT PRIMARY KEY,
+            //     user_id INT NOT NULL,
+            //     message VARCHAR(255),
+            //     is_read BOOLEAN DEFAULT false,
+            //     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            //     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            //     );`,
+        }
+        
+        for _, query := range queries {
 		_, err := db.Exec(query)
 		if err != nil {
 			log.Fatalf("Error running migration query: %v", err)

@@ -449,7 +449,7 @@ func (uh *UserHandler) AddBookToLibraryHandler(w http.ResponseWriter, r *http.Re
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		sendErrorResponse(w, http.StatusBadRequest, "Invalid request")
 		return
 	}
 
@@ -474,7 +474,7 @@ func (uh *UserHandler) AddBookToLibraryHandler(w http.ResponseWriter, r *http.Re
 }
 
 func (uh *UserHandler) AddBookToListingHandler(w http.ResponseWriter, r *http.Request) {
-	// Parse multipart form (for JSON and files)
+
 	err := r.ParseMultipartForm(10 << 20) // 10MB max
 	if err != nil {
 		log.Println("Parse Form Error:", err)
@@ -1376,7 +1376,6 @@ func (uh *UserHandler) GetAllUserPreferred(w http.ResponseWriter, r *http.Reques
 	})
 }
 
-// handler/user_handler.go
 func (uh *UserHandler) CreatePostHandler(w http.ResponseWriter, r *http.Request) {
 	// Parse multipart form (10MB max)
 	err := r.ParseMultipartForm(10 << 20)
@@ -1386,7 +1385,6 @@ func (uh *UserHandler) CreatePostHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Log the form data for debugging
 	log.Println("Form Data:", r.Form)
 
 	// Get content
@@ -1396,8 +1394,7 @@ func (uh *UserHandler) CreatePostHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Get image URLs (optional, from form field)
-	imageURLs := r.Form["image_urls"] // Multiple values if sent as array
+	imageURLs := r.Form["image_urls"] 
 
 	// Get genre_id and book_id (optional)
 	var genreID *int
@@ -1419,13 +1416,11 @@ func (uh *UserHandler) CreatePostHandler(w http.ResponseWriter, r *http.Request)
 		bookID = &id
 	}
 
-	// Enforce 1-to-1 relationship: only one of genre_id or book_id can be non-null
 	if genreID != nil && bookID != nil {
 		sendErrorResponse(w, http.StatusBadRequest, "Post can only reference either a genre OR a book, not both")
 		return
 	}
 
-	// Get userID from context
 	userID, ok := r.Context().Value("user_id").(int)
 	if !ok {
 		sendErrorResponse(w, http.StatusUnauthorized, "User ID missing")
@@ -1439,7 +1434,6 @@ func (uh *UserHandler) CreatePostHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Send success response with the created post
 	sendSuccessResponse(w, map[string]interface{}{
 		"success": true,
 		"message": "Post created successfully!",

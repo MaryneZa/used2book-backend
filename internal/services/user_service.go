@@ -4,7 +4,6 @@ import (
 	"context"
 	"used2book-backend/internal/models"
 	"used2book-backend/internal/repository/mysql"
-	"database/sql"
 )
 
 type UserService struct {
@@ -47,7 +46,7 @@ func (us *UserService) GetMe(ctx context.Context, userID int) (*models.GetMe, er
 
 }
 
-func (us *UserService) EditAccountInfo(ctx context.Context, userID int, firstName string, lastName string, phoneNumber sql.NullString)  error {
+func (us *UserService) EditAccountInfo(ctx context.Context, userID int, firstName string, lastName string, phoneNumber string)  error {
 	return us.userRepo.EditAccountInfo(ctx, userID, firstName, lastName, phoneNumber)
 }
 

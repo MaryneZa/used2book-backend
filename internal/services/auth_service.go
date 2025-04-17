@@ -20,7 +20,6 @@ func NewAuthService(repo *mysql.UserRepository) *AuthService {
 func (as *AuthService) Signup(ctx context.Context, reqUser models.AuthUser) (*models.GetMe, error) {
 	existing, err := as.userRepo.FindByEmail(ctx, reqUser.Email)
 
-	log.Println("Hi")
 	if err != nil {
 		return nil, err
 	}
@@ -29,9 +28,6 @@ func (as *AuthService) Signup(ctx context.Context, reqUser models.AuthUser) (*mo
 		return nil, fmt.Errorf("user already exists")
 	}
 
-	// 3. Hash password (bcrypt, argon2, etc.)
-
-	// Before hashing, just declare hashedPassword as an empty string:
 	var hashedPassword string
 
 	if reqUser.Provider == "local" {
@@ -62,6 +58,9 @@ func (as *AuthService) Signup(ctx context.Context, reqUser models.AuthUser) (*mo
 	}
 
 	user, err := as.userRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
 	return user, nil
 }
 
@@ -82,7 +81,6 @@ func (as *AuthService) Login(ctx context.Context, reqUser models.AuthUser) (*mod
 		}
 	}
 
-	
 
 	return user, nil
 

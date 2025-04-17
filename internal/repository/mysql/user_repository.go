@@ -545,7 +545,7 @@ func (ur *UserRepository) SaveBackgroundImage(userID int, imageURL string) error
 	return nil
 }
 
-func (ur *UserRepository) EditAccountInfo(ctx context.Context, userID int, firstName string, lastName string, phoneNumber sql.NullString) error {
+func (ur *UserRepository) EditAccountInfo(ctx context.Context, userID int, firstName string, lastName string, phoneNumber string) error {
 	query := `
 		UPDATE users
 		SET 
@@ -819,7 +819,7 @@ func (ur *UserRepository) GetPurchasedListingsByUserID(ctx context.Context, user
 			l.id AS listing_id,
 			l.book_id,
 			l.seller_id,
-			l.price,
+			t.transaction_amount AS price,
 			l.phone_number,
 			b.title AS book_title,
 			u.first_name,
@@ -1641,7 +1641,6 @@ func (ur *UserRepository) GetOfferByID(ctx context.Context, offerID int) (*model
 		&item.Status,
 		&item.BookID,
 		&item.BookTitle,
-		&item.BookAuthor,
 		&item.CoverImageURL,
 		&item.ImageURL,
 		&item.SellerID,
@@ -2242,36 +2241,62 @@ func (ur *UserRepository) CreateComment(ctx context.Context, postID, userID int,
 		return models.Comment{}, err
 	}
 
+	var first_name string
+	var last_name string
+	var picture_profile string
+	err = ur.db.QueryRowContext(ctx, "SELECT first_name, last_name, picture_profile FROM users WHERE id = ?", userID).Scan(&first_name, &last_name, &picture_profile)
+	if err != nil {
+		return models.Comment{}, err
+	}
+
 	comment := models.Comment{
 		ID:        int(commentID),
 		PostID:    postID,
 		UserID:    userID,
 		Content:   content,
 		CreatedAt: createdAt,
+		FirstName: first_name,
+		LastName: last_name,
+		PictureProfile: picture_profile,
 	}
 	return comment, nil
 }
 
 // GetCommentsByPostID fetches all comments for a post
 func (ur *UserRepository) GetCommentsByPostID(ctx context.Context, postID int) ([]models.Comment, error) {
-	rows, err := ur.db.QueryContext(ctx, "SELECT id, post_id, user_id, content, created_at FROM comments WHERE post_id = ? ORDER BY created_at ASC", postID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch comments: %v", err)
-	}
-	defer rows.Close()
+    rows, err := ur.db.QueryContext(ctx, `
+        SELECT c.id, c.post_id, c.user_id, c.content, c.created_at, 
+               u.first_name, u.last_name, u.picture_profile 
+        FROM comments c
+        JOIN users u ON c.user_id = u.id
+        WHERE c.post_id = ? 
+        ORDER BY c.created_at ASC`, postID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to fetch comments: %v", err)
+    }
+    defer rows.Close()
 
-	var comments []models.Comment
-	for rows.Next() {
-		var comment models.Comment
-		if err := rows.Scan(&comment.ID, &comment.PostID, &comment.UserID, &comment.Content, &comment.CreatedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan comment: %v", err)
-		}
-		comments = append(comments, comment)
-	}
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-	return comments, nil
+    var comments []models.Comment
+    for rows.Next() {
+        var comment models.Comment
+        if err := rows.Scan(
+            &comment.ID,
+            &comment.PostID,
+            &comment.UserID,
+            &comment.Content,
+            &comment.CreatedAt,
+            &comment.FirstName,
+            &comment.LastName,
+            &comment.PictureProfile,
+        ); err != nil {
+            return nil, fmt.Errorf("failed to scan comment: %v", err)
+        }
+        comments = append(comments, comment)
+    }
+    if err = rows.Err(); err != nil {
+        return nil, err
+    }
+    return comments, nil
 }
 
 // CreateLike adds a like to a post

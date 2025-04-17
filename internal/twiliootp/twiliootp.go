@@ -114,7 +114,7 @@ func SendOTP(ctx context.Context, phoneNumber string) error {
 
 	acc_phone, err := getTwilioPhoneNumber()
 	if err != nil {
-        fmt.Errorf("failed to get TWILIO_PHONE_NUMBER: %v", err)
+        return fmt.Errorf("failed to get TWILIO_PHONE_NUMBER: %v", err)
     } 
 
 	// Prepare the SMS message.
